@@ -1,78 +1,109 @@
 # Vitals Design QA
 
-## Comparison Target
+## 2026-07-11 redesign pass
 
-- Source visual truth: `/private/tmp/vitals-reference-light.png`, `/private/tmp/vitals-reference-dark.png`, and `/private/tmp/vitals-reference-menu.png`, cropped from the original ChatGPT-generated `System monitoring UI design concepts` image.
-- Implementation screenshots:
-  - `dist/renders/main-light.png`
-  - `dist/renders/main-dark.png`
-  - `dist/renders/menu-light.png`
-  - `dist/renders/menu-dark.png`
-  - `dist/renders/menu-ai-light.png`
-  - `dist/renders/menu-ai-dark.png`
-- Logical implementation viewport: 1180 × 450 points for the main dashboard; 282-point-wide menu panels.
-- State: deterministic demo data, Overview selected, 1H selected, System and AI menu panels captured separately.
+A multi-reviewer audit (grok CLI, codex CLI, and four specialized Claude
+lenses — information architecture, visual design, data-viz integrity,
+secondary surfaces; 146 findings synthesized into one plan) drove a redesign
+of every surface. Verification screenshots live in `dist/renders/`.
 
-## Full-View Comparison Evidence
+### Truthfulness fixes (P0)
 
-The source crops and implementation screenshots were opened together in the same comparison pass.
+- **Sparklines no longer min-max normalize.** `Sparkline` has exactly two
+  scales: absolute 0–1 for percent metrics, and a shared tiered ceiling
+  (`RateScale` in VitalsCore) for byte rates. A flat disk line renders flat.
+- **AI token accounting normalized.** Codex reports `input_tokens` inclusive
+  of `cached_input_tokens` (Claude's cache counts are separate);
+  `parseCodexLine` now subtracts so `input + output + cached == total` holds
+  for both providers and the provider cards' split bars are honest.
+- Storage "Fill over time" is absolute 0–100% with a delta headline
+  ("Effectively flat this 1H" below a 0.5 GB threshold) and a fixed height —
+  no more full-window chart of a flat line.
+- The swap band in the memory lane draws 1:1 on the RAM scale (visibility
+  floor 1.5 pt) instead of the old unlabeled ×4 amplification.
+- Age-fade on history bars removed — old data no longer fabricates a rising
+  trend; only the live bucket is highlighted.
+- Network strip cell lost its progress capsule (a fraction of a self-tuning
+  ceiling is not a capacity) and its value is direction-labeled ("↓ 2.4 MB/s")
+  on every surface that shows it.
+- Processes search is labeled "Filter top N" and its empty state explains the
+  ranked-sample scope instead of returning a false "no matches".
 
-- Light dashboard: the implementation matches the source hierarchy and composition: slim left navigation, traffic-light title-bar treatment, compact header controls, five aligned metric cards, a wide system-activity panel, AI usage summary, and top-process table. Card borders, corner radii, white/near-white surfaces, and blue selected navigation match the source direction.
-- Dark dashboard: the implementation matches the source's navy-black canvas, low-contrast borders, compact card density, colored metric series, restrained typography, and selected-navigation treatment. It intentionally preserves the same information architecture as light mode instead of removing Network and Storage navigation when the theme changes.
-- Menu-bar surfaces: the System and AI panels match the ultra-minimal reference's narrow popover, compact metric rows, colored values/sparklines, three-button footer, and low-elevation native surface.
+### Structure
 
-## Focused Region Comparison Evidence
+- One number, one home: the strip owns current values (CPU w/ 1-minute load,
+  Memory w/ total RAM, Network ↓/↑, Disk, Battery when present); lanes own
+  history with inline headers carrying each lane's unique fact (CPU: 5m/15m
+  load; Memory: swap; Network: upload + interface). The footer bar is deleted;
+  a shared wall-clock time axis under the lanes replaces it ("filling" chip
+  included). Tooltips lead with the bucket's wall-clock interval.
+- Side rail: status card (attention states only get tint; swap-in-use is
+  neutral copy), top-5 processes (title links to Processes), compact Machine
+  table (Chip / Cores / Thermal / Uptime).
+- Memory lane: step-area chart (memory is a level, not a bursty rate),
+  composition bar on a neutral track (free = track, not a painted segment),
+  full-word legend (Wired/Active/Inactive/Compressed/Free), swap annotated
+  separately in amber.
+- AI Usage page rebuilt: Today summary; truthful "Last 7 days" stacked daily
+  bars (per-day scans via the existing `AIUsageScanner.scanCodex/scanClaude`
+  day APIs, cached in `MonitorController.usageDays`; past days immutable,
+  today tracks the live snapshot); provider cards with input/output/cached
+  split bars; privacy footnote.
+- Storage page rebuilt: startup-volume card, mounted-volumes list
+  (`FileManager.mountedVolumeURLs`, internal/external badges), honest fill
+  chart. The old "free space" card (an inverted copy of the same series in a
+  borrowed green) is gone.
+- Network page: merged download/upload hero card, labeled y-axis
+  (0 / mid / ceiling) and time ticks on Throughput, single shared tier scale.
+- Menu popover: header shows the range and opens the main window (visible
+  chevron), Paused chip instead of an always-green dot, real tooltips on all
+  footer buttons, Disk row uses a capacity capsule instead of a meaningless
+  sparkline for a constant, merged Network row, divider before Quit.
+- Time-range control also appears on Network and Storage (the pages whose
+  charts it drives). Appearance is a Settings preference; the header toggle
+  was removed.
 
-- Metric cards: title/value/sparkline/detail alignment, color mapping, padding, and eight-point radii were inspected at full image resolution.
-- Lower dashboard: activity legend/axes, AI progress rows, process columns, dividers, and real application icons were inspected against the corresponding source panels.
-- Menu panels: row spacing, fixed label/value columns, sparkline scale, summary row, and footer-icon spacing were inspected against Option 3.
+### Type & color system
 
-## Current Product QA Findings
+- Seven-token ramp in `Style.swift` (`VText`): pageTitle 20, metricL 22
+  rounded, metricM 17 rounded, body 13, caption 11, kicker 11 upper/tracked,
+  micro 9 (chart captions only). No persistent text below 11 pt.
+- `VitalsColor` has fill/text pairs per metric; tinted text under 17 pt passes
+  ≥4.5:1 in both schemes. One blue (CPU = brand accent; Codex aliases it),
+  network teal, upload/Claude purple, memory orange (composition = one-hue
+  ramp, compressed desaturated violet-gray), amber = swap only, red = thermal
+  only, disk steel blue-gray. Axis labels and scale captions use secondary,
+  not tertiary, for dark-mode legibility.
 
-- The Overview is exception-first and no longer labels high memory occupancy as macOS memory pressure. Swap use is presented as a neutral status note; thermal and battery conditions remain actionable signals.
-- Network history uses an explicit shared scale with a 1 MB/s minimum instead of stretching each small burst to full height.
-- AI Usage presents one consolidated daily summary with provider composition and explicit token-accounting/privacy copy.
-- Processes is labeled as a ranked `Top 25` sample, supports name/PID search, and caches resolved application icons.
-- Settings is a dedicated fixed-width native macOS Settings window rather than a duplicate dashboard destination.
-- Main-screen typography and secondary contrast were raised where density previously compromised readability. The menu-bar surface remains intentionally compact.
-- Background processes without a resolvable application bundle use the native `app.dashed` symbol. User-facing applications use their real macOS icons when available.
+### Render harness
 
-## Intentional Product Constraints
+- Captures from an off-screen `NSWindow` (`cacheDisplay`), so AppKit-backed
+  controls (grouped Form, TextField, Picker) rasterize — Settings and the
+  Processes toolbar are reviewable. Fixed-size surfaces must clear
+  `NSHostingView.sizingOptions` (it under-measures fixed frames and
+  center-clips the capture); the self-sizing menu popover keeps them for
+  `fittingSize`.
+- All five sections render via `--section overview|ai|processes|network|storage`;
+  settings via `--surface settings`.
 
-- GPU and Neural Engine cards show detected hardware and an unavailable global-load state rather than the fabricated percentages in the concept. macOS does not expose supported public system-wide utilization for those devices.
-- AI cards show locally measured tokens and session counts. Cost, subscription quota, and a separate ChatGPT row are omitted because there is no trustworthy local billing source.
-- Light and dark modes share navigation and content structure so changing appearance does not change product capability. The palette and density follow the two source variants.
+### Verification
 
-## Required Fidelity Surfaces
+- `swift test` (7 tests), `make selftest` (30 checks), `make app` (signed
+  release bundle) all pass.
+- All fixtures re-rendered light + dark.
+- Second-opinion round: updated renders went back to the grok and codex CLIs.
+  Both confirmed the original P0s fixed; their converged #1 remaining issue
+  (inconsistent AI token accounting) was root-caused to Codex-vs-Claude
+  schema semantics and fixed at the parser (see above), along with the faint
+  tertiary text, unlabeled download value, Disk missing from the strip, and
+  the oversized Storage chart they flagged.
 
-- Fonts and typography: native SF Pro/SF Rounded optical weights reproduce the macOS concept hierarchy; small labels remain readable and do not clip.
-- Spacing and layout rhythm: sidebar proportion, header margins, five-column metric grid, panel gaps, padding, radii, and dividers align with the source. The native window height is capped to avoid the large empty region found during live QA.
-- Colors and visual tokens: CPU blue, GPU purple, NPU green, memory orange, and battery green match the source in both semantic themes with sufficient contrast.
-- Image quality and asset fidelity: the concept has no raster content. The implementation uses SF Symbols and real running-application icons rather than drawn or placeholder artwork.
-- Copy and content: source labels are preserved where truthful; unsupported or unavailable metrics are stated explicitly.
-- Accessibility: navigation and controls expose native button roles, selected state, labels, help text, and keyboard focus behavior.
+### Known intentional choices
 
-## Interaction Verification
-
-- Live native app launched from `dist/Vitals.app`.
-- Overview → AI Usage → Processes navigation was exercised through the accessibility interface and selected-state/content updates were confirmed.
-- The native Settings window was opened from the sidebar and its controls, disabled alert state, explanatory copy, and scrolling behavior were confirmed.
-- The only main window was closed and the running app was invoked again; the `main` SwiftUI window was recreated successfully.
-- The light/dark appearance control was exercised in both directions and its icon/state change was confirmed.
-- Time-range controls, menu-panel switcher, pause/resume, Settings link, and open-window action are implemented as native controls.
-- Direct SystemUIServer automation was unavailable, so menu interaction fidelity is covered by the deterministic System and AI menu renders plus compiled native control wiring.
-
-## Comparison History
-
-- Formal pass 1: passed. The reference and final implementation captures had no remaining P0/P1/P2 mismatch. Only the P3 dynamic-process-icon fallback remains.
-
-## Implementation Verification
-
-- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test`: 6 XCTest regressions passed.
-- `make selftest`: 30 core/live checks passed.
-- `make app`: release build, app assembly, ad-hoc signing, and signature validation passed.
-- `make render-samples`: light/dark dashboard and menu fixtures rendered successfully.
-- AI usage scanning now reads appended complete JSONL records by file offset, preserves cumulative Codex baselines and Claude record-ID deduplication, waits for partial trailing records, and resets safely on truncation.
-- Scanner day boundaries accept an injected calendar for deterministic timezone behavior, and timestamp parsing does not share mutable formatter instances across concurrent static entry points.
-
-final result: passed with screenshot-only accessibility limits documented above
+- Chart mark language is deliberately per-semantics: bars for bursty rates
+  (CPU, memory, network), lines for compact trends.
+- The status card aggregates thermal, battery, CPU, memory, and swap signals;
+  "Healthy" is scoped by its explanatory copy.
+- No system-wide GPU/Neural Engine utilization: macOS exposes no supported
+  public API; Vitals does not fabricate metrics. AI usage shows locally
+  measured tokens/sessions only — no cost estimates.

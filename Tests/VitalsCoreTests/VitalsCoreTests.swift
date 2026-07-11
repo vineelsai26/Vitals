@@ -41,6 +41,48 @@ final class VitalsCoreTests: XCTestCase {
         XCTAssertEqual(values.max(), 8_000)
     }
 
+    func testAdaptiveGridZoomsWhileHistoryIsFilling() {
+        let short = BarTimeGrid.effectiveDuration(range: .oneHour, availableSpan: 49)
+        XCTAssertLessThan(short, HistoryTimeRange.oneHour.duration)
+        XCTAssertGreaterThanOrEqual(short, 45)
+
+        let full = BarTimeGrid.effectiveDuration(range: .oneHour, availableSpan: 3_500)
+        XCTAssertEqual(full, HistoryTimeRange.oneHour.duration)
+
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        var history = MetricHistory()
+        for offset in stride(from: 40.0, through: 0, by: -2) {
+            history.append(0.5, at: end.addingTimeInterval(-offset))
+        }
+        let span = history.availableSpan(range: .fifteenMinutes, now: end)
+        let grid = BarTimeGrid.aligned(range: .fifteenMinutes, count: 20, now: end, availableSpan: span)
+        let values = grid.averages(from: history)
+        let filled = values.filter { $0 > 0 }.count
+        // Zoomed window should put data across most bars, not only the last 1–2.
+        XCTAssertGreaterThan(filled, 8)
+        XCTAssertLessThan(grid.bucketWidth * Double(grid.bucketCount), HistoryTimeRange.fifteenMinutes.duration)
+    }
+
+    func testAlignedGridCarriesSamplesAcrossFasterChartBuckets() {
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        var history = MetricHistory()
+        history.append(0.25, at: end.addingTimeInterval(-10))
+        history.append(0.75, at: end.addingTimeInterval(-5))
+
+        let grid = BarTimeGrid.aligned(
+            range: .fifteenMinutes,
+            count: 45,
+            now: end,
+            availableSpan: 10
+        )
+        let values = grid.averages(from: history)
+        let firstObserved = try! XCTUnwrap(values.firstIndex(where: { $0 > 0 }))
+
+        XCTAssertFalse(values[firstObserved...].contains(0))
+        XCTAssertTrue(values[firstObserved...].contains(0.25))
+        XCTAssertEqual(values.last, 0.75)
+    }
+
     func testUsageAvailabilityDistinguishesUnavailableFromNoActivity() {
         XCTAssertEqual(UsageSummary(isAvailable: false).displayStatus, "Unavailable")
         XCTAssertEqual(UsageSummary(isAvailable: true).displayStatus, "No activity today")

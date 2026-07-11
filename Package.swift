@@ -11,7 +11,10 @@ let package = Package(
         .executable(name: "VitalsApp", targets: ["VitalsApp"]),
         .executable(name: "vitals-selftest", targets: ["vitals-selftest"]),
     ],
-    dependencies: [],
+    dependencies: [
+        // Shared design system for the vstack macOS apps.
+        .package(path: "../vkit"),
+    ],
     targets: [
         .target(
             name: "VitalsCore",
@@ -21,6 +24,7 @@ let package = Package(
             name: "VitalsApp",
             dependencies: [
                 "VitalsCore",
+                .product(name: "VKit", package: "vkit"),
             ],
             path: "Sources/VitalsApp"
         ),

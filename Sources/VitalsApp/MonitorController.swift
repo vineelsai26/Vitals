@@ -1,10 +1,22 @@
 import Foundation
 import VitalsCore
 
+/// One calendar day of AI usage, scanned from local session metadata.
+struct DailyUsage: Identifiable, Equatable {
+    var day: Date
+    var codex: UsageSummary
+    var claude: UsageSummary
+
+    var id: Date { day }
+    var totalTokens: UInt64 { codex.totalTokens &+ claude.totalTokens }
+}
+
 @MainActor
 final class MonitorController: ObservableObject {
     @Published private(set) var snapshot: SystemSnapshot
     @Published private(set) var usage: AIUsageSnapshot
+    /// Last 7 days including today (oldest first). Past days scan once and cache.
+    @Published private(set) var usageDays: [DailyUsage] = []
     @Published private(set) var cpuHistory = MetricHistory()
     @Published private(set) var memoryHistory = MetricHistory()
     @Published private(set) var swapHistory = MetricHistory()
@@ -25,7 +37,11 @@ final class MonitorController: ObservableObject {
     private let alerts = AlertManager()
     private var samplingTask: Task<Void, Never>?
     private var lastUsageRefresh = Date.distantPast
+    private var lastUsageDaysScan = Date.distantPast
+    private var usageDaysScanInFlight = false
     private let demoMode: Bool
+
+    var isDemo: Bool { demoMode }
 
     init(
         settings: AppSettings? = nil,
@@ -46,6 +62,7 @@ final class MonitorController: ObservableObject {
         self.isRunning = demoMode
         if demoMode {
             seedDemoHistories()
+            seedDemoUsageDays()
         }
     }
 
@@ -101,23 +118,33 @@ final class MonitorController: ObservableObject {
         var memory: [Double]
         var swap: [Double]
         var download: [Double]
+        var upload: [Double]
         var barCount: Int
         var barDuration: TimeInterval
         var range: HistoryTimeRange
+        /// Effective window used for bucketing (may be shorter than `range` while history fills).
+        var windowDuration: TimeInterval
+        /// Wall-clock end of the window (the newest bucket's trailing edge).
+        var windowEnd: Date
     }
 
     /// One grid for CPU / memory / swap / network so new bars emerge together.
+    /// Zooms the window to retained history while samples are still filling the selected range.
     func overviewBarFrame(count: Int, range: HistoryTimeRange? = nil, now: Date = Date()) -> OverviewBarFrame {
         let resolved = range ?? historyRange
-        let grid = BarTimeGrid.aligned(range: resolved, count: count, now: now)
+        let span = cpuHistory.availableSpan(range: resolved, now: now)
+        let grid = BarTimeGrid.aligned(range: resolved, count: count, now: now, availableSpan: span)
         return OverviewBarFrame(
             cpu: grid.averages(from: cpuHistory),
             memory: grid.averages(from: memoryHistory),
             swap: grid.averages(from: swapHistory),
             download: grid.averages(from: downloadHistory),
+            upload: grid.averages(from: uploadHistory),
             barCount: grid.bucketCount,
             barDuration: grid.bucketWidth,
-            range: resolved
+            range: resolved,
+            windowDuration: grid.bucketWidth * Double(grid.bucketCount),
+            windowEnd: grid.bucketEnd(at: grid.bucketCount - 1)
         )
     }
 
@@ -171,6 +198,57 @@ final class MonitorController: ObservableObject {
         settings.historyRange = range
     }
 
+    /// Scan the previous six days of AI usage off the main actor. Past days
+    /// are immutable, so one scan per app-day is enough; today's entry tracks
+    /// the live `usage` snapshot.
+    func refreshUsageDaysIfNeeded(now: Date = Date()) {
+        guard !demoMode else { return }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let scanIsFresh = usageDays.count == 7
+            && usageDays.last?.day == today
+            && now.timeIntervalSince(lastUsageDaysScan) < 6 * 3_600
+        if scanIsFresh {
+            syncTodayUsageDay()
+            return
+        }
+        guard !usageDaysScanInFlight else { return }
+        usageDaysScanInFlight = true
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        Task { [weak self] in
+            let pastDays: [DailyUsage] = await Task.detached(priority: .utility) {
+                (1...6).reversed().compactMap { offset -> DailyUsage? in
+                    guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+                    return DailyUsage(
+                        day: day,
+                        codex: AIUsageScanner.scanCodex(
+                            root: home.appendingPathComponent(".codex", isDirectory: true),
+                            on: day,
+                            calendar: calendar
+                        ),
+                        claude: AIUsageScanner.scanClaude(
+                            root: home.appendingPathComponent(".claude", isDirectory: true),
+                            on: day,
+                            calendar: calendar
+                        )
+                    )
+                }
+            }.value
+            guard let self else { return }
+            self.usageDays = pastDays + [DailyUsage(day: today, codex: self.usage.codex, claude: self.usage.claude)]
+            self.lastUsageDaysScan = now
+            self.usageDaysScanInFlight = false
+        }
+    }
+
+    private func syncTodayUsageDay() {
+        guard let last = usageDays.last else { return }
+        let updated = DailyUsage(day: last.day, codex: usage.codex, claude: usage.claude)
+        if updated != last {
+            usageDays[usageDays.count - 1] = updated
+        }
+    }
+
     private func refresh(forceUsage: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
@@ -206,6 +284,7 @@ final class MonitorController: ObservableObject {
             }
             usage = newUsage
             lastUsageRefresh = Date()
+            syncTodayUsageDay()
         }
 
         if settings.alertsEnabled {
@@ -225,23 +304,27 @@ final class MonitorController: ObservableObject {
     }
 
     private func seedDemoHistories() {
-        let end = snapshot.capturedAt
-        cpuHistory.replaceAll(Self.demoSeries(seed: 0.36, amplitude: 0.15), spacing: 30, endingAt: end)
-        memoryHistory.replaceAll(Self.demoSeries(seed: 0.55, amplitude: 0.035), spacing: 30, endingAt: end)
-        swapHistory.replaceAll(Self.demoSeries(seed: 0.04, amplitude: 0.02, min: 0, max: 0.25), spacing: 30, endingAt: end)
+        // Align with wall-clock "now" so overview bar grids (which bucket by Date()) are dense.
+        let end = Date()
+        // ~1h of samples at 20s — enough texture for 56 overview bars and strip sparklines.
+        let spacing: TimeInterval = 20
+        cpuHistory.replaceAll(Self.demoSeries(seed: 0.36, amplitude: 0.22, min: 0.05, max: 0.92), spacing: spacing, endingAt: end)
+        memoryHistory.replaceAll(Self.demoSeries(seed: 0.55, amplitude: 0.08, min: 0.35, max: 0.88), spacing: spacing, endingAt: end)
+        swapHistory.replaceAll(Self.demoSeries(seed: 0.04, amplitude: 0.025, min: 0, max: 0.2), spacing: spacing, endingAt: end)
         downloadHistory.replaceAll(
-            Self.demoSeries(seed: 800_000, amplitude: 400_000, min: 0, max: 5_000_000),
-            spacing: 30,
+            Self.demoSeries(seed: 1_200_000, amplitude: 1_100_000, min: 40_000, max: 4_500_000),
+            spacing: spacing,
             endingAt: end
         )
         uploadHistory.replaceAll(
-            Self.demoSeries(seed: 120_000, amplitude: 80_000, min: 0, max: 2_000_000),
-            spacing: 30,
+            Self.demoSeries(seed: 220_000, amplitude: 180_000, min: 8_000, max: 1_200_000),
+            spacing: spacing,
             endingAt: end
         )
-        batteryHistory.replaceAll(Self.demoSeries(seed: 0.78, amplitude: 0.018), spacing: 30, endingAt: end)
-        diskHistory.replaceAll(Self.demoSeries(seed: 0.41, amplitude: 0.002), spacing: 30, endingAt: end)
-        thermalHistory.replaceAll(Self.demoSeries(seed: 0.15, amplitude: 0.02), spacing: 30, endingAt: end)
+        batteryHistory.replaceAll(Self.demoSeries(seed: 0.78, amplitude: 0.04, min: 0.55, max: 0.95), spacing: spacing, endingAt: end)
+        // Disk fill is nearly constant in real life; keep the demo honest.
+        diskHistory.replaceAll(Self.demoSeries(seed: 0.4145, amplitude: 0.0004, min: 0.4135, max: 0.4155), spacing: spacing, endingAt: end)
+        thermalHistory.replaceAll(Self.demoSeries(seed: 0.15, amplitude: 0.05, min: 0, max: 0.6), spacing: spacing, endingAt: end)
     }
 
     private static func demoSeries(
@@ -249,13 +332,53 @@ final class MonitorController: ObservableObject {
         amplitude: Double,
         min: Double = 0.04,
         max: Double = 0.94,
-        count: Int = 120
+        count: Int = 180
     ) -> [Double] {
         (0..<count).map { index in
-            let wave = sin(Double(index) * 0.42) * amplitude
-            let detail = sin(Double(index) * 1.37) * amplitude * 0.22
-            return Swift.min(Swift.max(seed + wave + detail, min), max)
+            let wave = sin(Double(index) * 0.28) * amplitude
+            let detail = sin(Double(index) * 0.91) * amplitude * 0.35
+            let spike = (index % 23 == 0) ? amplitude * 0.55 : 0
+            return Swift.min(Swift.max(seed + wave + detail + spike, min), max)
         }
+    }
+
+    private func seedDemoUsageDays() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        // Codex/Claude token totals for the six days before today (oldest first).
+        let seeds: [(codex: UInt64, claude: UInt64, codexSessions: Int, claudeSessions: Int)] = [
+            (198_400, 84_200, 5, 2),
+            (512_800, 233_100, 9, 6),
+            (301_500, 154_800, 6, 4),
+            (48_200, 0, 2, 0),
+            (0, 0, 0, 0),
+            (422_600, 187_300, 8, 5),
+        ]
+        var days: [DailyUsage] = []
+        for (offset, seed) in zip((1...6).reversed(), seeds) {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            days.append(DailyUsage(
+                day: day,
+                codex: UsageSummary(
+                    inputTokens: seed.codex / 2,
+                    outputTokens: seed.codex / 10,
+                    cachedTokens: seed.codex - seed.codex / 2 - seed.codex / 10,
+                    totalTokens: seed.codex,
+                    sessions: seed.codexSessions,
+                    isAvailable: true
+                ),
+                claude: UsageSummary(
+                    inputTokens: seed.claude / 2,
+                    outputTokens: seed.claude / 10,
+                    cachedTokens: seed.claude - seed.claude / 2 - seed.claude / 10,
+                    totalTokens: seed.claude,
+                    sessions: seed.claudeSessions,
+                    isAvailable: true
+                )
+            ))
+        }
+        days.append(DailyUsage(day: today, codex: usage.codex, claude: usage.claude))
+        usageDays = days
     }
 
     static func demo(settings: AppSettings? = nil) -> MonitorController {

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import VitalsCore
+import VKit
 
 enum MenuPanel: String {
     case system
@@ -12,9 +13,19 @@ struct MenuBarView: View {
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.openWindow) private var openWindow
     @State private var panel: MenuPanel
+    @State private var headerHovered = false
 
     init(initialPanel: MenuPanel = .system) {
         _panel = State(initialValue: initialPanel)
+    }
+
+    private var rateCeiling: Double {
+        RateScale.ceiling(for: max(
+            controller.downloadValues().max() ?? 0,
+            controller.uploadValues().max() ?? 0,
+            controller.snapshot.downloadBytesPerSecond,
+            controller.snapshot.uploadBytesPerSecond
+        ))
     }
 
     var body: some View {
@@ -24,21 +35,36 @@ struct MenuBarView: View {
                     openWindow(id: "main")
                     NSApplication.shared.activate(ignoringOtherApps: true)
                 } label: {
-                    HStack {
+                    HStack(spacing: 5) {
                         Text(panel == .system ? "System" : "AI Usage Today")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(VText.bodyStrong)
+                        if panel == .system {
+                            Text("· \(controller.historyRange.label)")
+                                .font(VText.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(headerHovered ? .secondary : .tertiary)
                         Spacer()
-                        Circle()
-                            .fill(controller.isRunning ? .green : .secondary)
-                            .frame(width: 6, height: 6)
+                        if !controller.isRunning {
+                            Text("Paused")
+                                .font(VText.caption)
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(.orange.opacity(0.14), in: Capsule())
+                        }
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onHover { headerHovered = $0 }
                 .help("Open Vitals")
 
                 if let error = controller.errorMessage {
                     Text(error)
-                        .font(.system(size: 9))
+                        .font(VText.caption)
                         .foregroundStyle(.orange)
                 }
 
@@ -53,19 +79,28 @@ struct MenuBarView: View {
             Divider()
 
             HStack(spacing: 0) {
-                toolbarButton(panel == .system ? "brain.head.profile" : "chart.xyaxis.line", selected: false) {
+                toolbarButton(
+                    panel == .system ? "brain.head.profile" : "gauge.with.dots.needle.50percent",
+                    help: panel == .system ? "Show AI usage" : "Show system metrics"
+                ) {
                     panel = panel == .system ? .aiUsage : .system
                 }
-                toolbarButton(controller.isRunning ? "pause.circle" : "play.circle", selected: false) {
+                toolbarButton(
+                    controller.isRunning ? "pause.circle" : "play.circle",
+                    help: controller.isRunning ? "Pause monitoring" : "Resume monitoring"
+                ) {
                     controller.toggleRunning()
                 }
                 SettingsLink {
                     Image(systemName: "gearshape")
+                        .foregroundStyle(Color.secondary)
                         .frame(maxWidth: .infinity, minHeight: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("Settings")
-                toolbarButton("power", selected: false) {
+                Divider().frame(height: 16)
+                toolbarButton("power", help: "Quit Vitals") {
                     NSApplication.shared.terminate(nil)
                 }
             }
@@ -74,94 +109,165 @@ struct MenuBarView: View {
             .padding(.vertical, 4)
         }
         .frame(width: 300)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Palette.background)
     }
 
     private var systemRows: some View {
         VStack(spacing: 10) {
-            metricRow("CPU", value: VitalsFormat.percent(controller.snapshot.cpuUsage), history: controller.cpuValues(), detail: String(format: "%.2f", controller.snapshot.loadAverage), tint: VitalsColor.cpu)
-            metricRow("Memory", value: VitalsFormat.percent(controller.snapshot.memoryFraction), history: controller.memoryValues(), detail: VitalsFormat.bytes(controller.snapshot.memoryUsedBytes), tint: VitalsColor.memory)
-            metricRow("Disk", value: VitalsFormat.percent(controller.snapshot.diskFraction), history: controller.diskValues(), detail: VitalsFormat.bytes(controller.snapshot.diskFreeBytes) + " free", tint: VitalsColor.disk)
-            metricRow("Down", value: VitalsFormat.rate(controller.snapshot.downloadBytesPerSecond), history: controller.downloadValues(), detail: controller.snapshot.primaryInterfaceName ?? "—", tint: VitalsColor.network)
-            metricRow("Up", value: VitalsFormat.rate(controller.snapshot.uploadBytesPerSecond), history: controller.uploadValues(), detail: controller.snapshot.primaryInterfaceName ?? "—", tint: VitalsColor.upload)
-            metricRow("Battery", value: controller.snapshot.batteryLevel.map(VitalsFormat.percent) ?? "AC", history: controller.batteryValues(), detail: batteryDetail, tint: VitalsColor.battery)
+            metricRow(
+                "CPU",
+                value: VitalsFormat.percent(controller.snapshot.cpuUsage),
+                detail: "Load \(String(format: "%.2f", controller.snapshot.loadAverage))",
+                tint: VitalsColor.cpu,
+                textTint: VitalsColor.cpuText
+            ) {
+                Sparkline(values: controller.cpuValues(), tint: VitalsColor.cpu, scale: .unit)
+            }
+            metricRow(
+                "Memory",
+                value: VitalsFormat.percent(controller.snapshot.memoryFraction),
+                detail: "\(VitalsFormat.bytes(controller.snapshot.memoryUsedBytes)) used",
+                tint: VitalsColor.memory,
+                textTint: VitalsColor.memoryText
+            ) {
+                Sparkline(values: controller.memoryValues(), tint: VitalsColor.memory, scale: .unit)
+            }
+            metricRow(
+                "Disk",
+                value: VitalsFormat.percent(controller.snapshot.diskFraction),
+                detail: "\(VitalsFormat.bytes(controller.snapshot.diskFreeBytes)) free",
+                tint: VitalsColor.disk,
+                textTint: VitalsColor.diskText
+            ) {
+                // A near-constant level has no shape worth drawing — show capacity.
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                        Capsule()
+                            .fill(VitalsColor.disk.opacity(0.9))
+                            .frame(width: max(2, geo.size.width * controller.snapshot.diskFraction))
+                    }
+                    .frame(height: 4)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                }
+            }
+            metricRow(
+                "Network",
+                value: "↓ \(VitalsFormat.rate(controller.snapshot.downloadBytesPerSecond))",
+                detail: networkDetail,
+                tint: VitalsColor.network,
+                textTint: VitalsColor.networkText
+            ) {
+                Sparkline(
+                    values: controller.downloadValues(),
+                    tint: VitalsColor.network,
+                    scale: .rate(ceiling: rateCeiling)
+                )
+            }
+            metricRow(
+                "Battery",
+                value: controller.snapshot.batteryLevel.map(VitalsFormat.percent) ?? "AC",
+                detail: batteryDetail,
+                tint: VitalsColor.battery,
+                textTint: VitalsColor.batteryText
+            ) {
+                Sparkline(values: controller.batteryValues(), tint: VitalsColor.battery, scale: .unit)
+            }
         }
+    }
+
+    private var networkDetail: String {
+        "↑ \(VitalsFormat.rate(controller.snapshot.uploadBytesPerSecond))"
     }
 
     private var usageRows: some View {
         VStack(spacing: 10) {
             usageRow("Codex", systemImage: "chevron.left.forwardslash.chevron.right", summary: controller.usage.codex)
-            if let status = controller.usage.codex.displayStatus {
-                Text(status).font(.system(size: 9)).foregroundStyle(.secondary)
-            }
             usageRow("Claude", systemImage: "sparkles", summary: controller.usage.claude)
-            if let status = controller.usage.claude.displayStatus {
-                Text(status).font(.system(size: 9)).foregroundStyle(.secondary)
-            }
             Divider()
             HStack {
-                Text("Sessions").foregroundStyle(.secondary)
+                Text("Today").foregroundStyle(.secondary)
                 Spacer()
-                Text("\(controller.usage.totalSessions)")
-                Text("Total Tokens").foregroundStyle(.secondary).padding(.leading, 12)
-                Text(VitalsFormat.compactTokens(controller.usage.totalTokens))
+                Text("\(controller.usage.totalSessions) sessions · \(VitalsFormat.compactTokens(controller.usage.totalTokens)) tokens")
+                    .monospacedDigit()
             }
-            .font(.system(size: 9.5))
-            .monospacedDigit()
+            .font(VText.caption)
         }
     }
 
-    private func metricRow(
+    private func metricRow<Chart: View>(
         _ title: String,
         value: String,
-        history: [Double],
         detail: String,
-        tint: Color
+        tint: Color,
+        textTint: Color,
+        @ViewBuilder chart: () -> Chart
     ) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 10))
-                .frame(width: 48, alignment: .leading)
+                .font(VText.caption)
+                .frame(width: 50, alignment: .leading)
             Text(value)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(VText.captionStrong)
+                .foregroundStyle(textTint)
                 .monospacedDigit()
-                .frame(width: 58, alignment: .leading)
-            Sparkline(values: history, tint: tint)
-                .frame(width: 54, height: 15)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(width: 62, alignment: .leading)
+            chart()
+                .frame(width: 56, height: 15)
             Spacer(minLength: 2)
             Text(detail)
-                .font(.system(size: 9))
+                .font(VText.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title) \(value), \(detail)")
     }
 
     private func usageRow(_ title: String, systemImage: String, summary: UsageSummary) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
-                .frame(width: 18, height: 18)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
-            Text(title).font(.system(size: 10))
-            Spacer()
-            Text("\(summary.sessions) sessions")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
-            Text(VitalsFormat.compactTokens(summary.totalTokens))
-                .font(.system(size: 9.5, weight: .medium)).monospacedDigit()
-                .frame(width: 52, alignment: .trailing)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
+                Text(title).font(VText.caption)
+                Spacer()
+                Text("\(summary.sessions) sessions")
+                    .font(VText.caption).foregroundStyle(.secondary)
+                Text(VitalsFormat.compactTokens(summary.totalTokens))
+                    .font(VText.captionStrong).monospacedDigit()
+                    .frame(width: 52, alignment: .trailing)
+            }
+            HStack {
+                if let status = summary.displayStatus {
+                    Text(status).font(VText.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let last = summary.lastActivity {
+                    Text("Last \(VitalsFormat.shortTime(last))")
+                        .font(VText.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.leading, 26)
         }
     }
 
-    private func toolbarButton(_ systemImage: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func toolbarButton(_ systemImage: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .foregroundStyle(selected ? VitalsColor.cpu : Color.secondary)
+                .foregroundStyle(Color.secondary)
                 .frame(maxWidth: .infinity, minHeight: 30)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(systemImage == "power" ? "Quit Vitals" : "")
+        .help(help)
     }
 
     private var batteryDetail: String {

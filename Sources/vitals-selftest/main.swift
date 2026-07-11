@@ -89,9 +89,32 @@ enum Main {
         let memMask = memBars.map { $0 > 0 }
         test.check(cpuMask == memMask, "synced series share the same non-empty bar slots")
 
+        // Faster chart buckets must hold the latest observed level between refreshes,
+        // rather than introducing false zero-value gaps between real samples.
+        let coldGrid = BarTimeGrid.aligned(
+            range: .fifteenMinutes,
+            count: 45,
+            now: syncEnd,
+            availableSpan: 10
+        )
+        var coldHistory = MetricHistory(maxSamples: 20, maxAge: 3_600)
+        coldHistory.append(0.25, at: syncEnd.addingTimeInterval(-10))
+        coldHistory.append(0.75, at: syncEnd.addingTimeInterval(-5))
+        let coldBars = coldGrid.averages(from: coldHistory)
+        if let firstObserved = coldBars.firstIndex(where: { $0 > 0 }) {
+            test.check(!coldBars[firstObserved...].contains(0), "chart buckets hold values between refreshes")
+        } else {
+            test.check(false, "cold-start samples appear in chart buckets")
+        }
+
         let codexLine = Data(#"{"timestamp":"2026-07-10T12:00:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":120,"cached_input_tokens":80,"output_tokens":30,"total_tokens":150}}}}"#.utf8)
+        // Codex reports input_tokens inclusive of cached; the parser normalizes
+        // so inputTokens is uncached input and input + output + cached == total.
         let codex = AIUsageScanner.parseCodexLine(codexLine)
-        test.check(codex?.inputTokens == 120 && codex?.totalTokens == 150, "Codex token event parser")
+        test.check(
+            codex?.inputTokens == 40 && codex?.cachedTokens == 80 && codex?.totalTokens == 150,
+            "Codex token event parser"
+        )
 
         let claudeLine = Data(#"{"type":"assistant","timestamp":"2026-07-10T12:00:00.000Z","message":{"id":"msg_1","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":30,"cache_creation_input_tokens":20}}}"#.utf8)
         let claude = AIUsageScanner.parseClaudeLine(claudeLine)

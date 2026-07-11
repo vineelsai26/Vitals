@@ -116,8 +116,11 @@ public actor AIUsageScanner {
         let input = uint(usage["input_tokens"])
         let output = uint(usage["output_tokens"])
         let cached = uint(usage["cached_input_tokens"])
+        // Codex reports input_tokens INCLUSIVE of cached_input_tokens (unlike
+        // Claude, whose cache counts are separate). Normalize so inputTokens
+        // always means uncached input and input + output + cached == total.
         return UsageDelta(
-            inputTokens: input,
+            inputTokens: input >= cached ? input - cached : 0,
             outputTokens: output,
             cachedTokens: cached,
             totalTokens: uint(usage["total_tokens"], fallback: input + output),

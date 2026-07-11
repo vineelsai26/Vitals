@@ -50,3 +50,21 @@ public enum VitalsFormat {
         return date.formatted(date: .omitted, time: .shortened)
     }
 }
+
+/// Shared ceiling ladder for throughput charts, so every surface that plots
+/// the same rate series agrees on scale and the ceiling steps between round
+/// values instead of continuously rubber-banding to the latest peak.
+public enum RateScale {
+    public static let tiers: [Double] = [
+        256_000, 1_000_000, 5_000_000, 10_000_000, 25_000_000,
+        50_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000,
+    ]
+
+    /// Smallest tier that contains `peak` (minimum 1 MB/s so idle traffic
+    /// doesn't stretch to full height); rounds up in whole GB/s beyond the ladder.
+    public static func ceiling(for peak: Double) -> Double {
+        let floored = max(peak, 0)
+        return tiers.first(where: { $0 >= floored && $0 >= 1_000_000 })
+            ?? (floored / 1_000_000_000).rounded(.up) * 1_000_000_000
+    }
+}

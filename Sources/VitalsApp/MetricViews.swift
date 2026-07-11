@@ -1,26 +1,7 @@
 import AppKit
 import SwiftUI
 import VitalsCore
-
-enum VitalsColor {
-    static let cpu = Color(red: 0.12, green: 0.43, blue: 0.98)
-    static let gpu = Color(red: 0.47, green: 0.23, blue: 0.96)
-    static let npu = Color(red: 0.12, green: 0.58, blue: 0.27)
-    static let memory = Color(red: 1.00, green: 0.36, blue: 0.04)
-    static let memoryWired = Color(red: 0.75, green: 0.22, blue: 0.12)
-    static let memoryActive = Color(red: 1.00, green: 0.45, blue: 0.12)
-    static let memoryInactive = Color(red: 0.95, green: 0.62, blue: 0.28)
-    static let memoryCompressed = Color(red: 0.72, green: 0.38, blue: 0.85)
-    static let memoryFree = Color(red: 0.35, green: 0.42, blue: 0.48)
-    static let memorySwap = Color(red: 0.95, green: 0.72, blue: 0.20)
-    static let battery = Color(red: 0.10, green: 0.55, blue: 0.25)
-    static let network = Color(red: 0.08, green: 0.53, blue: 0.94)
-    static let disk = Color(red: 0.15, green: 0.55, blue: 0.75)
-    static let upload = Color(red: 0.55, green: 0.30, blue: 0.92)
-    static let thermal = Color(red: 0.90, green: 0.35, blue: 0.15)
-    static let codex = Color(red: 0.18, green: 0.48, blue: 0.96)
-    static let claude = Color(red: 0.50, green: 0.28, blue: 0.92)
-}
+import VKit
 
 struct DashboardCard<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -34,17 +15,15 @@ struct DashboardCard<Content: View>: View {
         content
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(cardFill, in: RoundedRectangle(cornerRadius: VRadius.card, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: VRadius.card, style: .continuous)
                     .stroke(cardBorder, lineWidth: 1)
             }
     }
 
     private var cardFill: Color {
-        colorScheme == .dark
-            ? Color(red: 0.055, green: 0.075, blue: 0.105)
-            : Color.white
+        colorScheme == .dark ? Palette.surface : Color.white
     }
 
     private var cardBorder: Color {
@@ -52,35 +31,123 @@ struct DashboardCard<Content: View>: View {
     }
 }
 
+/// How a sparkline maps values to height. There is deliberately no
+/// self-normalizing mode: flat series must read as flat.
+enum SparklineScale {
+    /// Absolute 0…1 domain for percent-like metrics.
+    case unit
+    /// 0…ceiling domain for byte rates; pass a shared `RateScale` ceiling.
+    case rate(ceiling: Double)
+}
+
+struct Sparkline: View {
+    let values: [Double]
+    let tint: Color
+    var scale: SparklineScale = .unit
+    /// Soft gradient fill under the line.
+    var fill: Bool = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            if values.count < 2 {
+                // Cold start: honest dashed baseline, not a fabricated flat line.
+                Path { path in
+                    let y = geometry.size.height - 1
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: geometry.size.width, y: y))
+                }
+                .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            } else {
+                let points = scaledPoints(in: geometry.size)
+                ZStack {
+                    if fill, let first = points.first, let last = points.last {
+                        Path { path in
+                            path.move(to: CGPoint(x: first.x, y: geometry.size.height))
+                            points.forEach { path.addLine(to: $0) }
+                            path.addLine(to: CGPoint(x: last.x, y: geometry.size.height))
+                            path.closeSubpath()
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(0.22), tint.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    }
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        points.dropFirst().forEach { path.addLine(to: $0) }
+                    }
+                    .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
+    }
+
+    private func scaledPoints(in size: CGSize) -> [CGPoint] {
+        let ceiling: Double
+        switch scale {
+        case .unit:
+            ceiling = 1
+        case .rate(let value):
+            ceiling = max(value, 1)
+        }
+        // Inset the stroke so extremes are not clipped by the frame.
+        let inset: CGFloat = 1
+        let usable = max(size.height - inset * 2, 1)
+        return values.enumerated().map { index, value in
+            let fraction = min(max(value / ceiling, 0), 1)
+            return CGPoint(
+                x: CGFloat(index) / CGFloat(max(values.count - 1, 1)) * size.width,
+                y: inset + usable - CGFloat(fraction) * usable
+            )
+        }
+    }
+}
+
 struct CompactMetricCard: View {
+    enum Kind {
+        case percent
+        case rate
+    }
+
     let title: String
     let value: String
     let detailLabel: String
     let detailValue: String
     let history: [Double]
     let tint: Color
+    var kind: Kind = .percent
+    var rateCeiling: Double = 1
     var helpText: String? = nil
 
     var body: some View {
         DashboardCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(VText.bodyStrong)
                 Text(value)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .font(VText.metricL)
                     .foregroundStyle(tint)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Sparkline(values: history, tint: tint)
-                    .frame(height: 30)
-                    .accessibilityLabel(accessibilitySummary)
+                Sparkline(
+                    values: history,
+                    tint: tint,
+                    scale: kind == .percent ? .unit : .rate(ceiling: rateCeiling),
+                    fill: true
+                )
+                .frame(height: 30)
+                .accessibilityLabel(accessibilitySummary)
                 HStack {
                     Text(detailLabel)
                     Spacer(minLength: 4)
                     Text(detailValue).monospacedDigit()
                 }
-                .font(.system(size: 9.5))
+                .font(VText.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
@@ -91,52 +158,21 @@ struct CompactMetricCard: View {
 
     private var accessibilitySummary: String {
         guard let last = history.last else { return "\(title) recent activity unavailable" }
-        let avg = history.reduce(0, +) / Double(max(history.count, 1))
-        return "\(title) average \(String(format: "%.0f", avg * 100)) percent, latest \(String(format: "%.0f", last * 100)) percent over \(history.count) samples"
-    }
-}
-
-struct Sparkline: View {
-    let values: [Double]
-    let tint: Color
-    var normalizeToUnit: Bool = true
-
-    var body: some View {
-        GeometryReader { geometry in
-            let points = normalizedPoints(in: geometry.size)
-            Path { path in
-                guard let first = points.first else { return }
-                path.move(to: first)
-                points.dropFirst().forEach { path.addLine(to: $0) }
-            }
-            .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
-    }
-
-    private func normalizedPoints(in size: CGSize) -> [CGPoint] {
-        let source = values.isEmpty ? [0.5, 0.5] : values
-        if normalizeToUnit {
-            let range = max((source.max() ?? 1) - (source.min() ?? 0), 0.12)
-            let floor = (source.min() ?? 0) - range * 0.18
-            return source.enumerated().map { index, value in
-                CGPoint(
-                    x: CGFloat(index) / CGFloat(max(source.count - 1, 1)) * size.width,
-                    y: size.height - CGFloat((value - floor) / (range * 1.36)) * size.height
-                )
-            }
-        }
-        let maxValue = max(source.max() ?? 1, 1)
-        return source.enumerated().map { index, value in
-            CGPoint(
-                x: CGFloat(index) / CGFloat(max(source.count - 1, 1)) * size.width,
-                y: size.height - CGFloat(value / maxValue) * size.height
-            )
+        switch kind {
+        case .percent:
+            let avg = history.reduce(0, +) / Double(max(history.count, 1))
+            return "\(title) average \(VitalsFormat.percent(avg)), latest \(VitalsFormat.percent(last)) over \(history.count) samples"
+        case .rate:
+            return "\(title) latest \(VitalsFormat.rate(last)) over \(history.count) samples"
         }
     }
 }
 
 struct MultiLineChart: View {
     let series: [(values: [Double], color: Color, unitScale: ChartScale)]
+    /// Shared rate ceiling; pass `RateScale.ceiling(for:)` of the peak across
+    /// every rate series shown together so surfaces agree.
+    var rateCeiling: Double = 1_000_000
 
     enum ChartScale {
         case unit
@@ -145,10 +181,6 @@ struct MultiLineChart: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let sharedRatePeak = max(
-                series.filter { $0.unitScale == .rate }.flatMap(\.values).max() ?? 0,
-                1_000_000
-            )
             ZStack {
                 VStack(spacing: 0) {
                     ForEach(0..<4, id: \.self) { _ in
@@ -160,7 +192,7 @@ struct MultiLineChart: View {
                     chartPath(
                         values: item.values,
                         scale: item.unitScale,
-                        ratePeak: sharedRatePeak,
+                        ratePeak: rateCeiling,
                         size: geometry.size
                     )
                         .stroke(item.color, style: StrokeStyle(lineWidth: 1.35, lineCap: .round, lineJoin: .round))
@@ -177,7 +209,7 @@ struct MultiLineChart: View {
         case .unit:
             normalized = values.map { min(max($0, 0), 1) }
         case .rate:
-            normalized = values.map { min(max($0 / ratePeak, 0), 1) }
+            normalized = values.map { min(max($0 / max(ratePeak, 1), 0), 1) }
         }
         for (index, value) in normalized.enumerated() {
             let point = CGPoint(
@@ -190,235 +222,6 @@ struct MultiLineChart: View {
     }
 }
 
-struct ActivityPanel: View {
-    @EnvironmentObject private var controller: MonitorController
-
-    var body: some View {
-        DashboardCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("System Activity").font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    Text(controller.rangeDisplayLabel())
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                        .help("Shows available history for the selected range")
-                }
-                HStack(spacing: 12) {
-                    legend("CPU", VitalsColor.cpu)
-                    legend("Memory", VitalsColor.memory)
-                    legend("Down*", VitalsColor.network)
-                    legend("Up*", VitalsColor.upload)
-                }
-                Text("* Network series scaled to their own peak in this window")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.tertiary)
-                HStack(spacing: 7) {
-                    VStack {
-                        Text("100%")
-                        Spacer()
-                        Text("50%")
-                        Spacer()
-                        Text("0%")
-                    }
-                    .font(.system(size: 8))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 27)
-                    MultiLineChart(series: [
-                        (controller.cpuValues(), VitalsColor.cpu, .unit),
-                        (controller.memoryValues(), VitalsColor.memory, .unit),
-                        (controller.downloadValues(), VitalsColor.network, .rate),
-                        (controller.uploadValues(), VitalsColor.upload, .rate),
-                    ])
-                    .accessibilityLabel(activityAccessibility)
-                }
-                .frame(maxHeight: .infinity)
-                .frame(minHeight: 108)
-                HStack {
-                    ForEach(Array(controller.timeAxisLabels().enumerated()), id: \.offset) { index, date in
-                        if index > 0 { Spacer() }
-                        Text(VitalsFormat.axisTime(date, span: controller.historyRange.duration))
-                    }
-                }
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    private func legend(_ title: String, _ color: Color) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 5, height: 5)
-            Text(title).font(.system(size: 8.5)).foregroundStyle(.secondary)
-        }
-    }
-
-    private var activityAccessibility: String {
-        let cpu = controller.cpuValues()
-        let mem = controller.memoryValues()
-        let cpuAvg = cpu.isEmpty ? 0 : cpu.reduce(0, +) / Double(cpu.count)
-        let memAvg = mem.isEmpty ? 0 : mem.reduce(0, +) / Double(mem.count)
-        return "System activity \(controller.rangeDisplayLabel()). CPU average \(VitalsFormat.percent(cpuAvg)), memory average \(VitalsFormat.percent(memAvg))."
-    }
-}
-
-struct AIUsagePanel: View {
-    @EnvironmentObject private var controller: MonitorController
-
-    private var combinedTotal: UInt64 {
-        controller.usage.totalTokens
-    }
-
-    var body: some View {
-        DashboardCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("AI Usage Today").font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    Text("Today")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                }
-                usageRow("Codex", systemImage: "chevron.left.forwardslash.chevron.right", summary: controller.usage.codex, tint: VitalsColor.codex)
-                Divider()
-                usageRow("Claude", systemImage: "sparkles", summary: controller.usage.claude, tint: VitalsColor.claude)
-                Spacer(minLength: 2)
-                Divider()
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Sessions").foregroundStyle(.secondary)
-                        Text("\(controller.usage.totalSessions)").monospacedDigit()
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("Total Tokens").foregroundStyle(.secondary)
-                        Text(VitalsFormat.compactTokens(combinedTotal)).monospacedDigit()
-                    }
-                }
-                .font(.system(size: 9.5))
-            }
-        }
-    }
-
-    private func usageRow(_ title: String, systemImage: String, summary: UsageSummary, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(title).font(.system(size: 10.5, weight: .medium))
-                        Spacer()
-                        Text(VitalsFormat.compactTokens(summary.totalTokens))
-                            .font(.system(size: 9.5)).monospacedDigit()
-                    }
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.quaternary)
-                            Capsule().fill(tint).frame(width: geometry.size.width * share(for: summary))
-                        }
-                    }
-                    .frame(height: 4)
-                }
-            }
-            if let status = summary.displayStatus {
-                Text(status)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func share(for summary: UsageSummary) -> Double {
-        guard combinedTotal > 0 else { return 0 }
-        return Double(summary.totalTokens) / Double(combinedTotal)
-    }
-}
-
-struct ProcessPanel: View {
-    let processes: [ProcessMetric]
-    var limit: Int = 5
-
-    var body: some View {
-        DashboardCard {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    Text("Top Processes").font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    Text("CPU")
-                    Text("Memory").frame(width: 52, alignment: .trailing)
-                }
-                .font(.system(size: 8.5))
-                .foregroundStyle(.secondary)
-
-                ForEach(processes.prefix(limit)) { process in
-                    HStack(spacing: 6) {
-                        processIcon(process)
-                        Text(process.name)
-                            .font(.system(size: 9.5))
-                            .lineLimit(1)
-                            .help(process.path ?? process.name)
-                        Spacer()
-                        Text(String(format: "%.1f%%", process.cpuUsage))
-                            .font(.system(size: 9)).monospacedDigit()
-                        Text(VitalsFormat.bytes(process.memoryBytes))
-                            .font(.system(size: 9)).monospacedDigit()
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                    if process.id != processes.prefix(limit).last?.id { Divider() }
-                }
-
-                if processes.isEmpty {
-                    Text("Process activity will appear after the next refresh.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 100, alignment: .center)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func processIcon(_ process: ProcessMetric) -> some View {
-        if let image = applicationIcon(for: process) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 17, height: 17)
-        } else {
-            Image(systemName: "app.dashed")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 17, height: 17)
-                .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 3))
-        }
-    }
-
-    private func applicationIcon(for process: ProcessMetric) -> NSImage? {
-        if let path = process.path {
-            let url = URL(fileURLWithPath: path)
-            if path.contains(".app") {
-                var appURL = url
-                while appURL.pathExtension != "app", appURL.path != "/" {
-                    appURL.deleteLastPathComponent()
-                }
-                if appURL.pathExtension == "app" {
-                    return NSWorkspace.shared.icon(forFile: appURL.path)
-                }
-            }
-            if let app = NSWorkspace.shared.urlForApplication(toOpen: url) {
-                return NSWorkspace.shared.icon(forFile: app.path)
-            }
-        }
-        let normalized = process.name.lowercased()
-        return NSWorkspace.shared.runningApplications.first { application in
-            guard let appName = application.localizedName?.lowercased() else { return false }
-            return appName == normalized || appName.contains(normalized) || normalized.contains(appName)
-        }?.icon
-    }
-}
-
 struct StatusBanner: View {
     let message: String
     var isError: Bool = false
@@ -427,12 +230,12 @@ struct StatusBanner: View {
         HStack(spacing: 8) {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle")
             Text(message)
-                .font(.system(size: 11))
+                .font(VText.caption)
             Spacer()
         }
         .foregroundStyle(isError ? Color.orange : Color.secondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background((isError ? Color.orange : Color.secondary).opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .background((isError ? Color.orange : Color.secondary).opacity(0.12), in: RoundedRectangle(cornerRadius: VRadius.chip + 2))
     }
 }

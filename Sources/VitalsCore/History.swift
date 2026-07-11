@@ -214,13 +214,18 @@ public struct BarTimeGrid: Sendable, Equatable {
     public let now: Date
 
     /// Build an epoch-aligned grid of `count` buckets ending with the in-progress bucket that contains `now`.
+    ///
+    /// When `availableSpan` is shorter than the selected range (history still filling),
+    /// the grid zooms to that span so bars fill the chart instead of leaving a left void.
     public static func aligned(
         range: HistoryTimeRange,
         count: Int,
-        now: Date = Date()
+        now: Date = Date(),
+        availableSpan: TimeInterval? = nil
     ) -> BarTimeGrid {
         let n = max(count, 1)
-        let width = range.duration / Double(n)
+        let duration = effectiveDuration(range: range, availableSpan: availableSpan)
+        let width = max(duration / Double(n), 0.25)
         let nowTs = now.timeIntervalSince1970
         // Current incomplete bucket: [floor(now/Δ)*Δ, floor(now/Δ)*Δ + Δ)
         let currentStartTs = floor(nowTs / width) * width
@@ -235,6 +240,21 @@ public struct BarTimeGrid: Sendable, Equatable {
         )
     }
 
+    /// Prefer the selected range once history is mostly filled; otherwise zoom to retained span.
+    public static func effectiveDuration(
+        range: HistoryTimeRange,
+        availableSpan: TimeInterval?
+    ) -> TimeInterval {
+        let full = range.duration
+        guard let available = availableSpan, available > 0 else { return full }
+        // Keep a small pad past the newest sample so the live bar has room to grow.
+        let padded = available * 1.08
+        // Don't zoom below 45s — avoids frantic 1-second bars on cold start.
+        let floor: TimeInterval = 45
+        if padded >= full * 0.88 { return full }
+        return min(full, max(floor, padded))
+    }
+
     public func bucketStart(at index: Int) -> Date {
         windowStart.addingTimeInterval(Double(index) * bucketWidth)
     }
@@ -243,7 +263,11 @@ public struct BarTimeGrid: Sendable, Equatable {
         windowStart.addingTimeInterval(Double(index + 1) * bucketWidth)
     }
 
-    /// Average of samples falling in each bucket for one history series.
+    /// Average samples in each bucket, carrying the latest observation through
+    /// buckets between refreshes. Time-series samples describe the measured
+    /// level until the next sample arrives; treating those buckets as zero
+    /// creates artificial gaps whenever the chart bucket is narrower than the
+    /// collection cadence.
     public func averages(from history: MetricHistory) -> [Double] {
         let samples = history.samples
         guard !samples.isEmpty else {
@@ -252,10 +276,12 @@ public struct BarTimeGrid: Sendable, Equatable {
 
         var result = Array(repeating: 0.0, count: bucketCount)
         var sampleIndex = 0
+        var latestValue: Double?
         let n = samples.count
 
-        // Skip samples before the window.
+        // A sample before the window remains the latest known level at its start.
         while sampleIndex < n, samples[sampleIndex].at < windowStart {
+            latestValue = samples[sampleIndex].value
             sampleIndex += 1
         }
 
@@ -279,7 +305,12 @@ public struct BarTimeGrid: Sendable, Equatable {
                 seen += 1
                 cursor += 1
             }
-            result[bucket] = seen > 0 ? sum / Double(seen) : 0
+            if seen > 0 {
+                result[bucket] = sum / Double(seen)
+                latestValue = samples[cursor - 1].value
+            } else if start <= now, let latestValue {
+                result[bucket] = latestValue
+            }
             sampleIndex = cursor
         }
         return result

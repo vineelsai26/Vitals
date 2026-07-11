@@ -312,8 +312,10 @@ public struct SystemSnapshot: Sendable, Equatable {
     public static let memoryDefinitionNote =
         "Memory used includes wired, active, inactive, and compressed pages. Free includes free + speculative. Swap is separate from physical RAM."
 
-    public static let demo = SystemSnapshot(
-        capturedAt: Date(timeIntervalSince1970: 1_788_700_000),
+    /// Demo snapshot for UI renders. `capturedAt` is "now" so history grids align with seeded series.
+    public static var demo: SystemSnapshot {
+        SystemSnapshot(
+        capturedAt: Date(),
         cpuUsage: 0.37,
         memoryUsedBytes: MemoryBreakdown.demo.usedBytes,
         memoryTotalBytes: MemoryBreakdown.demo.totalBytes,
@@ -352,7 +354,8 @@ public struct SystemSnapshot: Sendable, Equatable {
             ProcessMetric(pid: 220, name: "kernel_task", cpuUsage: 2.4, memoryBytes: 90_000_000),
             ProcessMetric(pid: 330, name: "Finder", cpuUsage: 1.2, memoryBytes: 140_000_000),
         ]
-    )
+        )
+    }
 }
 
 public struct UsageSummary: Sendable, Equatable {
@@ -409,7 +412,7 @@ public struct AIUsageSnapshot: Sendable, Equatable {
     public static let demo = AIUsageSnapshot(
         capturedAt: Date(timeIntervalSince1970: 1_788_700_000),
         codex: UsageSummary(
-            inputTokens: 284_300,
+            inputTokens: 112_500,
             outputTokens: 18_420,
             cachedTokens: 171_800,
             totalTokens: 302_720,
