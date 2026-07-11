@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vitals — Data-driven motion</title>
+  <style>
+    :root {
+      --page: #08090c;
+      --ink: #eceef3;
+      --muted: #8b909c;
+      --line: rgba(255,255,255,0.08);
+      --cpu: #6eb0ff;
+      --mem: #ff9a5c;
+      --net: #5ce1ff;
+      --bat: #5dff9a;
+      --disk: #8ab4ff;
+      --ai: #b28dff;
+      --up: #c4a0ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--page);
+      color: var(--ink);
+      line-height: 1.45;
+      padding: 48px 40px 100px;
+    }
+    a { color: #8ab4ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 0.9em;
+      color: #c8cdd8;
+    }
+    .page-header { max-width: 1280px; margin: 0 auto 32px; }
+    .page-header h1 {
+      font-size: 28px; font-weight: 600; letter-spacing: -0.03em;
+    }
+    .page-header p {
+      margin-top: 10px; color: var(--muted); max-width: 72ch; font-size: 14px;
+    }
+    .nav-links {
+      margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px;
+    }
+    .nav-links a {
+      color: #a0a6b4; border: 1px solid var(--line); border-radius: 999px;
+      padding: 5px 12px;
+    }
+    .nav-links a:hover { color: #fff; border-color: rgba(255,255,255,0.2); text-decoration: none; }
+
+    /* Principle card */
+    .principles {
+      max-width: 1280px; margin: 0 auto 40px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .principle {
+      background: #111318;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .principle h3 {
+      font-size: 12px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px;
+    }
+    .principle p { font-size: 11.5px; color: var(--muted); }
+
+    /* Live control bar */
+    .control-bar {
+      max-width: 1280px; margin: 0 auto 40px;
+      background: #111318;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .control-bar h2 {
+      font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); font-weight: 500; margin-bottom: 12px;
+    }
+    .control-bar .hint {
+      font-size: 12px; color: var(--muted); margin-bottom: 14px;
+    }
+    .sliders {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 20px;
+    }
+    .slider-row label {
+      display: flex; justify-content: space-between; font-size: 11px;
+      margin-bottom: 4px; color: #b4b8c2;
+    }
+    .slider-row label b {
+      font-variant-numeric: tabular-nums; font-weight: 600;
+    }
+    .slider-row input[type=range] {
+      width: 100%; accent-color: #6eb0ff;
+    }
+    .presets {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+    }
+    .presets button {
+      font: inherit; font-size: 11px; color: #c8cdd8;
+      background: #1a1d26; border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 12px; cursor: pointer;
+    }
+    .presets button:hover { border-color: rgba(255,255,255,0.2); color: #fff; }
+    .presets button.active {
+      background: rgba(110,176,255,0.12);
+      border-color: rgba(110,176,255,0.35);
+      color: #9ec0ff;
+    }
+
+    .options {
+      max-width: 1280px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 56px;
+    }
+    .option {
+      display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start;
+    }
+    .meta h2 {
+      font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px;
+    }
+    .meta .tag {
+      display: inline-block; font-size: 11px; font-weight: 500; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; margin-bottom: 12px;
+    }
+    .meta p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .bind-table {
+      width: 100%; border-collapse: collapse; font-size: 11.5px;
+      margin-top: 8px;
+    }
+    .bind-table th {
+      text-align: left; font-weight: 500; color: #6b7280;
+      padding: 4px 0; border-bottom: 1px solid var(--line);
+      font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .bind-table td {
+      padding: 6px 8px 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #b4b8c2; vertical-align: top;
+    }
+    .bind-table td:first-child { color: #e8eaf0; font-weight: 500; white-space: nowrap; }
+    .bind-table .swatch {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+
+    .stage {
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    }
+    .stage-label {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #6b7280; padding: 10px 14px; background: #0a0b0e;
+      border-bottom: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #3dd68c; letter-spacing: 0.08em; font-size: 9px;
+    }
+    .live-pill::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%;
+      background: #3dd68c; box-shadow: 0 0 8px #3dd68c;
+    }
+    .window {
+      width: 100%; min-height: 400px; position: relative; overflow: hidden;
+      background: #0a0c12;
+    }
+    .traffic {
+      display: flex; gap: 6px; position: absolute; top: 14px; left: 16px; z-index: 5;
+    }
+    .traffic i {
+      width: 10px; height: 10px; border-radius: 50%; display: block;
+    }
+    .traffic .r { background: #ff5f57; }
+    .traffic .y { background: #febc2e; }
+    .traffic .g { background: #28c840; }
+
+    /* Shared readout chips */
+    .readout-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      position: relative; z-index: 2;
+    }
+    .readout {
+      background: rgba(12,14,20,0.72);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      backdrop-filter: blur(12px);
+    }
+    .readout .lab {
+      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(255,255,255,0.4); margin-bottom: 4px;
+    }
+    .readout .val {
+      font-size: 26px; font-weight: 500; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+    }
+    .readout .sub {
+      font-size: 10.5px; color: rgba(255,255,255,0.4); margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ========== 1: HONEST SPARK STRIP ========== */
+    .s1 .body {
+      padding: 44px 22px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      min-height: 400px;
+    }
+    .s1 .title {
+      padding-left: 40px;
+      font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(255,255,255,0.4); font-weight: 500;
+    }
+    .s1 .strip {
+      display: flex; flex-direction: column; gap: 0;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .s1 .row {
+      display: grid;
+      grid-template-columns: 72px 72px 1fr 80px;
+      gap: 12px; align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .s1 .row:last-child { border-bottom: none; }
+    .s1 .name {
+      font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: rgba(255,255,255,0.45); font-weight: 500;
+    }
+    .s1 .num {
+      font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .s1 .spark-box { height: 36px; position: relative; }
+    .s1 .spark-box canvas { width: 100%; height: 100%; display: block; }
+    .s1 .detail {
+      font-size: 11px; color: rgba(255,255,255,0.4);
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .s1 .foot {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    }
+    .s1 .foot-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 12px 14px;
+    }
+    .s1 .foot-card .k {
+      font-size: 10px; color: rgba(255,255,255,0.4);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .s1 .foot-card .v {
+      font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums;
+    }
+    .s1 .foot-card .bar {
+      margin-top: 8px; height: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .s1 .foot-card .bar > i {
+      display: block; height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--cpu), var(--ai));
+      width: 0%; transition: width 0.4s ease-out;
+    }
+
+    /* ========== 2: BOUND RINGS ========== */
+    .s2 {
+      display: grid; grid-template-columns: 1fr 220px;
+      min-height: 400px;
+      background: radial-gradient(ellipse at 42% 48%, #12151f 0%, #07080c 70%);
+    }
+    .s2 .orbit-stage {
+      display: grid; place-items: center; position: relative; min-height: 400px;
+    }
+    .s2 .orbit-wrap {
+      position: relative; width: 280px; height: 280px;
+    }
+    .s2 .ring-svg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      overflow: visible;
+    }
+    .s2 .core {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      pointer-events: none;
+    }
+    .s2 .core-inner {
+      width: 96px; height: 96px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #1a2238, #0a0d14 70%);
+      border: 1px solid rgba(110,176,255,0.25);
+      display: grid; place-items: center; text-align: center;
+      transition: box-shadow 0.35s ease, transform 0.35s ease;
+    }
+    .s2 .core-inner .pct {
+      font-size: 26px; font-weight: 500; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+    .s2 .core-inner .lbl {
+      font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(238,240,246,0.45);
+    }
+    .s2 .side {
+      border-left: 1px solid rgba(255,255,255,0.06);
+      padding: 48px 16px 18px;
+      background: rgba(0,0,0,0.25);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .s2 .side h3 {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.35); margin: 12px 0 6px; font-weight: 500;
+    }
+    .s2 .side h3:first-child { margin-top: 0; }
+    .s2 .srow {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; padding: 7px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .s2 .srow .n { color: rgba(255,255,255,0.45); display: flex; align-items: center; gap: 8px; }
+    .s2 .srow .v { font-variant-numeric: tabular-nums; font-weight: 500; }
+    .s2 .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .s2 .legend {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 14px; font-size: 10px; color: rgba(255,255,255,0.4);
+      z-index: 2;
+    }
+    .s2 .legend span::before {
+      content: ""; display: inline-block; width: 8px; height: 3px;
+      border-radius: 1px; margin-right: 5px; vertical-align: middle;
+    }
+    .s2 .legend .l-cpu::before { background: var(--cpu); }
+    .s2 .legend .l-mem::before { background: var(--mem); }
+    .s2 .legend .l-net::before { background: var(--net); }
+    .s2 .legend .l-bat::before { background: var(--bat); }
+
+    /* ========== 3: ACTIVITY FIELD ========== */
+    .s3 .body {
+      padding: 44px 20px 18px;
+      min-height: 400px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .s3 .title {
+      padding-left: 40px; font-size: 12px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: rgba(255,255,255,0.4);
+    }
+    .s3 .field {
+      position: relative; flex: 1; min-height: 200px;
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: #070910;
+    }
+    .s3 .field canvas { width: 100%; height: 100%; display: block; }
+    .s3 .field-legend {
+      position: absolute; top: 10px; left: 12px; z-index: 2;
+      display: flex; gap: 12px; font-size: 10px; color: rgba(255,255,255,0.45);
+    }
+    .s3 .field-legend i {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 4px; vertical-align: middle;
+    }
+    .s3 .bottom-readouts { margin-top: 0; }
+
+    /* ========== 4: FILLED METERS ========== */
+    .s4 {
+      background: #f4f2ed; color: #1a1814;
+    }
+    .s4 .body {
+      padding: 44px 22px 20px; min-height: 400px;
+    }
+    .s4 .title {
+      padding-left: 40px; font-size: 15px; font-weight: 600;
+      letter-spacing: -0.02em; margin-bottom: 16px; color: #1a1814;
+    }
+    .s4 .meters { display: flex; flex-direction: column; gap: 12px; }
+    .s4 .meter {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(40,30,10,0.04);
+    }
+    .s4 .meter-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .s4 .meter-head .name {
+      font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #8a857a; font-weight: 500;
+    }
+    .s4 .meter-head .num {
+      font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .s4 .track {
+      height: 10px; border-radius: 5px;
+      background: rgba(0,0,0,0.05); overflow: hidden; position: relative;
+    }
+    .s4 .track > .fill {
+      height: 100%; border-radius: 5px;
+      width: 0%;
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      position: relative;
+    }
+    .s4 .track > .fill::after {
+      content: "";
+      position: absolute; right: 0; top: 0; bottom: 0; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .s4 .track > .fill.active::after {
+      opacity: 1;
+      animation: sheen 1.2s ease-out;
+    }
+    @keyframes sheen {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(200%); }
+    }
+    .s4 .spark-inline {
+      height: 28px; margin-top: 8px;
+    }
+    .s4 .spark-inline canvas { width: 100%; height: 100%; display: block; }
+    .s4 .meta-line {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: #9a958a; margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .s4 .two-col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;
+    }
+
+    /* ========== 5: PARTICLE FLOW (glanceable + data-driven) ========== */
+    .s5 {
+      background: #080a10;
+      color: #e8eaf0;
+      min-height: 460px;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Top: always-readable metrics — primary scan path */
+    .s5 .pf-metrics {
+      position: relative; z-index: 3;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-top: 36px;
+    }
+    .s5 .pf-metric {
+      background: #0c0e16;
+      padding: 14px 16px 12px;
+      min-width: 0;
+    }
+    .s5 .pf-metric .lab {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(232,234,240,0.5);
+      margin-bottom: 4px;
+    }
+    .s5 .pf-metric .lab .dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .s5 .pf-metric .val {
+      font-size: 28px; font-weight: 600; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+      line-height: 1.1;
+    }
+    .s5 .pf-metric .hint {
+      font-size: 10px; color: rgba(232,234,240,0.38);
+      margin-top: 4px; line-height: 1.3;
+    }
+    .s5 .pf-metric .bar {
+      margin-top: 8px; height: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .s5 .pf-metric .bar > i {
+      display: block; height: 100%; border-radius: 2px;
+      width: 0%; transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .s5 .pf-metric.cpu .val { color: var(--cpu); }
+    .s5 .pf-metric.mem .val { color: var(--mem); }
+    .s5 .pf-metric.net .val { color: var(--net); }
+    .s5 .pf-metric.bat .val { color: var(--bat); }
+
+    /* Legend: one sentence decode */
+    .s5 .pf-legend {
+      position: relative; z-index: 3;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+      padding: 10px 16px;
+      font-size: 11px; color: rgba(232,234,240,0.55);
+      background: rgba(0,0,0,0.25);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .s5 .pf-legend .key {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: rgba(232,234,240,0.72);
+    }
+    .s5 .pf-legend .key b { color: #fff; font-weight: 600; }
+    .s5 .pf-legend .sw {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .s5 .pf-legend .sep {
+      width: 1px; height: 12px; background: rgba(255,255,255,0.1);
+    }
+
+    /* Field + side context */
+    .s5 .pf-body {
+      position: relative;
+      flex: 1;
+      min-height: 240px;
+      display: grid;
+      grid-template-columns: 1fr 168px;
+    }
+    .s5 .pf-field-wrap {
+      position: relative;
+      overflow: hidden;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      min-height: 260px;
+    }
+    .s5 canvas.pf-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    /* HTML lane chrome — always readable even if canvas is subtle */
+    .s5 .pf-lanes {
+      position: absolute; inset: 0; z-index: 2;
+      display: grid;
+      grid-template-rows: 1fr 1fr 1fr;
+      pointer-events: none;
+    }
+    .s5 .pf-lane {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      min-height: 0;
+    }
+    .s5 .pf-lane:last-child { border-bottom: none; }
+    .s5 .pf-lane-meta {
+      padding: 10px 10px 10px 14px;
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 2px;
+      background: linear-gradient(90deg, rgba(8,10,16,0.92), rgba(8,10,16,0.35));
+    }
+    .s5 .pf-lane-meta .ln {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .s5 .pf-lane-meta .lv {
+      font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+    .s5 .pf-lane-meta .lm {
+      font-size: 9px; color: rgba(232,234,240,0.4); line-height: 1.3;
+    }
+    .s5 .pf-lane.cpu .ln, .s5 .pf-lane.cpu .lv { color: var(--cpu); }
+    .s5 .pf-lane.mem .ln, .s5 .pf-lane.mem .lv { color: var(--mem); }
+    .s5 .pf-lane.net .ln, .s5 .pf-lane.net .lv { color: var(--net); }
+    .s5 .pf-lane-track {
+      position: relative;
+    }
+    .s5 .pf-lane-track::after {
+      content: attr(data-hint);
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 9px; letter-spacing: 0.04em;
+      color: rgba(232,234,240,0.28);
+    }
+
+    .s5 .pf-side {
+      padding: 14px 12px 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      background: rgba(0,0,0,0.2);
+    }
+    .s5 .pf-side h4 {
+      font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,234,240,0.38); font-weight: 600; margin-bottom: 2px;
+    }
+    .s5 .pf-side .row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 12px; padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .s5 .pf-side .row .n { color: rgba(232,234,240,0.45); }
+    .s5 .pf-side .row .v {
+      font-weight: 600; font-variant-numeric: tabular-nums; color: #fff;
+    }
+    .s5 .pf-side .note {
+      margin-top: auto;
+      font-size: 10px; line-height: 1.45;
+      color: rgba(232,234,240,0.35);
+      padding-top: 8px;
+    }
+
+    /* Footer status — tertiary */
+    .s5 .pf-foot {
+      position: relative; z-index: 3;
+      display: flex; flex-wrap: wrap; gap: 8px 18px;
+      padding: 10px 16px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: rgba(232,234,240,0.45);
+      background: #0a0c12;
+      font-variant-numeric: tabular-nums;
+    }
+    .s5 .pf-foot b { color: rgba(232,234,240,0.88); font-weight: 600; }
+    .s5 .pf-foot .status-ok { color: var(--bat); }
+    .s5 .pf-foot .status-warn { color: var(--mem); }
+
+    /* ========== 6: MENU BAR DATA ========== */
+    .menu-demo {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
+    }
+    .menu-pop {
+      width: 280px; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--line); background: #12141a; color: #e8eaf0;
+      font-size: 11px;
+    }
+    .menu-pop .mh {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px 6px; font-weight: 600; font-size: 11px;
+    }
+    .menu-pop .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+    }
+    .menu-pop .mr {
+      display: grid; grid-template-columns: 42px 48px 1fr auto;
+      gap: 6px; align-items: center; padding: 6px 12px; font-size: 10.5px;
+    }
+    .menu-pop .spark-mini { height: 16px; }
+    .menu-pop .spark-mini canvas { width: 100%; height: 100%; display: block; }
+    .menu-pop .mf {
+      display: flex; justify-content: space-around;
+      border-top: 1px solid rgba(128,128,128,0.15);
+      padding: 8px; color: #888; font-size: 12px;
+    }
+
+    .contract {
+      max-width: 1280px; margin: 48px auto 0;
+      background: #111318; border: 1px solid var(--line);
+      border-radius: 14px; padding: 20px 22px;
+    }
+    .contract h2 {
+      font-size: 14px; font-weight: 600; margin-bottom: 10px;
+    }
+    .contract table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    .contract th {
+      text-align: left; font-size: 10px; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #6b7280; font-weight: 500;
+      padding: 6px 10px 8px 0; border-bottom: 1px solid var(--line);
+    }
+    .contract td {
+      padding: 8px 12px 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #b4b8c2; vertical-align: top;
+    }
+    .contract td:first-child { color: #e8eaf0; font-weight: 500; white-space: nowrap; }
+    .contract .bad { color: #f87171; }
+    .contract .good { color: #4ade80; }
+
+    @media (max-width: 960px) {
+      .option, .principles, .sliders { grid-template-columns: 1fr; }
+      .s2 { grid-template-columns: 1fr; }
+      .s5 .pf-metrics { grid-template-columns: 1fr 1fr; }
+      .s5 .pf-body { grid-template-columns: 1fr; }
+      .s5 .pf-side { border-top: 1px solid rgba(255,255,255,0.06); }
+      body { padding: 28px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Data-driven motion</h1>
+    <p>
+      Practical rule: <strong style="color:#e8eaf0">every animation encodes a real metric</strong>.
+      Nothing loops “for vibe.” Drag the controls below — all mockups share the same live sample state,
+      so you can see how motion should respond to idle, load, memory pressure, network bursts, and charging.
+    </p>
+    <div class="nav-links">
+      <a href="#particles">Particle Flow</a>
+      <a href="#strip">Spark Strip</a>
+      <a href="#rings">Bound Orbital</a>
+      <a href="#field">Activity Field</a>
+      <a href="#meters">Filled Meters</a>
+      <a href="#contract">Motion contract</a>
+      <a href="index.html">A–D layouts</a>
+    </div>
+  </header>
+
+  <div class="principles">
+    <div class="principle">
+      <h3>1. History draws the line</h3>
+      <p>Sparklines and charts are append-only samples over time — not decorative noise generators.</p>
+    </div>
+    <div class="principle">
+      <h3>2. Level sets amplitude</h3>
+      <p>Ring arcs, bar fills, blob size, and core glow scale with the current value (0–100% or rate).</p>
+    </div>
+    <div class="principle">
+      <h3>3. Delta sets urgency</h3>
+      <p>Only animate transitions when the value changes. Idle ≈ still. Spike ≈ brief motion, then settle.</p>
+    </div>
+    <div class="principle">
+      <h3>4. No fake activity</h3>
+      <p>If GPU load is unavailable, don’t animate a GPU wave. Flat / “Detected” is the honest state.</p>
+    </div>
+  </div>
+
+  <div class="control-bar">
+    <h2>Shared live sample · drag to simulate usage</h2>
+    <p class="hint">
+      These sliders are the mock “MonitorController snapshot.” In the real app they come from
+      <code>SystemMetricsCollector</code> + history buffers — same bindings, real numbers.
+    </p>
+    <div class="sliders">
+      <div class="slider-row">
+        <label>CPU <b id="lbl-cpu">18%</b></label>
+        <input type="range" id="cpu" min="0" max="100" value="18" />
+      </div>
+      <div class="slider-row">
+        <label>Memory <b id="lbl-mem">42%</b></label>
+        <input type="range" id="mem" min="0" max="100" value="42" />
+      </div>
+      <div class="slider-row">
+        <label>Disk <b id="lbl-disk">38%</b></label>
+        <input type="range" id="disk" min="0" max="100" value="38" />
+      </div>
+      <div class="slider-row">
+        <label>Download (MB/s) <b id="lbl-down">0.4</b></label>
+        <input type="range" id="down" min="0" max="50" value="4" step="0.1" />
+      </div>
+      <div class="slider-row">
+        <label>Upload (MB/s) <b id="lbl-up">0.1</b></label>
+        <input type="range" id="up" min="0" max="20" value="1" step="0.1" />
+      </div>
+      <div class="slider-row">
+        <label>Battery <b id="lbl-bat">78%</b></label>
+        <input type="range" id="bat" min="0" max="100" value="78" />
+      </div>
+    </div>
+    <div class="presets">
+      <button type="button" data-preset="idle" class="active">Idle laptop</button>
+      <button type="button" data-preset="compile">Heavy compile</button>
+      <button type="button" data-preset="browse">Browsing + video</button>
+      <button type="button" data-preset="pressure">Memory pressure</button>
+      <button type="button" data-preset="burst">Network burst</button>
+      <button type="button" data-preset="lowbat">Low battery</button>
+    </div>
+  </div>
+
+  <div class="options">
+
+    <!-- ========== OPTION 5: PARTICLE FLOW (glanceable) ========== -->
+    <section class="option" id="particles">
+      <div class="meta">
+        <span class="tag">1 · Particle Flow · recommended</span>
+        <h2>Particle Flow</h2>
+        <p>
+          <strong style="color:#e8eaf0">Numbers first · three bar-chart lanes second.</strong>
+          Each lane is a history bar chart: left = older samples, right = now,
+          bar height = usage from bottom (0%) to top (100%).
+        </p>
+        <table class="bind-table">
+          <thead><tr><th>Lane</th><th>How to read it</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="swatch" style="background:var(--cpu)"></span>CPU (top)</td>
+              <td>Bars = <code>cpu</code> history · height 0–100%</td>
+            </tr>
+            <tr>
+              <td><span class="swatch" style="background:var(--mem)"></span>Memory (mid)</td>
+              <td>Bars = memory history · height 0–100%</td>
+            </tr>
+            <tr>
+              <td><span class="swatch" style="background:var(--net)"></span>Network (bottom)</td>
+              <td>Bars = download history (peak-normalized in window)</td>
+            </tr>
+            <tr>
+              <td>Battery</td>
+              <td>Dims all lanes under 20%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main · readable particle overview</span>
+            <span class="live-pill">Numbers primary · field secondary</span>
+          </div>
+          <div class="window s5">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+
+            <!-- 1. Primary: always-readable metrics -->
+            <div class="pf-metrics">
+              <div class="pf-metric cpu">
+                <div class="lab"><span class="dot" style="background:var(--cpu)"></span>CPU</div>
+                <div class="val" data-bind="cpuPct">18%</div>
+                <div class="hint">Load <span data-bind="load">1.20</span> · top lane fill</div>
+                <div class="bar"><i id="pf-bar-cpu" style="background:var(--cpu)"></i></div>
+              </div>
+              <div class="pf-metric mem">
+                <div class="lab"><span class="dot" style="background:var(--mem)"></span>Memory</div>
+                <div class="val" data-bind="memPct">42%</div>
+                <div class="hint"><span data-bind="memDetail">13.4 GB</span> · middle lane fill</div>
+                <div class="bar"><i id="pf-bar-mem" style="background:var(--mem)"></i></div>
+              </div>
+              <div class="pf-metric net">
+                <div class="lab"><span class="dot" style="background:var(--net)"></span>Network</div>
+                <div class="val" data-bind="downRate">0.4M</div>
+                <div class="hint">↑ <span data-bind="upRate">0.1M</span> · bottom lane stream</div>
+                <div class="bar"><i id="pf-bar-net" style="background:var(--net)"></i></div>
+              </div>
+              <div class="pf-metric bat">
+                <div class="lab"><span class="dot" style="background:var(--bat)"></span>Battery</div>
+                <div class="val" data-bind="batPct">78%</div>
+                <div class="hint" data-bind="batDetail">On battery</div>
+                <div class="bar"><i id="pf-bar-bat" style="background:var(--bat)"></i></div>
+              </div>
+            </div>
+
+            <!-- 2. Decode key -->
+            <div class="pf-legend">
+              <span class="key"><span class="sw" style="background:var(--cpu)"></span><b>CPU bars</b> = recent CPU samples</span>
+              <span class="sep"></span>
+              <span class="key"><span class="sw" style="background:var(--mem)"></span><b>Memory bars</b> = recent mem samples</span>
+              <span class="sep"></span>
+              <span class="key"><span class="sw" style="background:var(--net)"></span><b>Network bars</b> = recent download rate</span>
+              <span class="sep"></span>
+              <span class="key" style="opacity:0.7">Left = older · right = now · bar height 0%→100% bottom→top</span>
+            </div>
+
+            <!-- 3. Three-lane field + side -->
+            <div class="pf-body">
+              <div class="pf-field-wrap">
+                <canvas class="pf-canvas" id="particle-flow"></canvas>
+                <div class="pf-lanes">
+                  <div class="pf-lane cpu">
+                    <div class="pf-lane-meta">
+                      <span class="ln">CPU</span>
+                      <span class="lv" data-bind="cpuPct">18%</span>
+                      <span class="lm">bar chart</span>
+                    </div>
+                    <div class="pf-lane-track" data-hint="each bar = one recent sample"></div>
+                  </div>
+                  <div class="pf-lane mem">
+                    <div class="pf-lane-meta">
+                      <span class="ln">Memory</span>
+                      <span class="lv" data-bind="memPct">42%</span>
+                      <span class="lm">bar chart</span>
+                    </div>
+                    <div class="pf-lane-track" data-hint="each bar = one recent sample"></div>
+                  </div>
+                  <div class="pf-lane net">
+                    <div class="pf-lane-meta">
+                      <span class="ln">Network</span>
+                      <span class="lv" data-bind="downRate">0.4M</span>
+                      <span class="lm">bar chart</span>
+                    </div>
+                    <div class="pf-lane-track" data-hint="each bar = recent down rate"></div>
+                  </div>
+                </div>
+              </div>
+              <aside class="pf-side">
+                <h4>Also</h4>
+                <div class="row"><span class="n">Upload</span><span class="v" data-bind="upRate">0.1M</span></div>
+                <div class="row"><span class="n">Disk</span><span class="v" data-bind="diskPct">38%</span></div>
+                <div class="row"><span class="n">Load avg</span><span class="v" data-bind="load">1.20</span></div>
+                <div class="row"><span class="n">Thermal</span><span class="v" data-bind="thermal">Nominal</span></div>
+                <div class="row"><span class="n">Top app</span><span class="v" data-bind="topProc">WindowServer</span></div>
+                <div class="row"><span class="n">Battery</span><span class="v" data-bind="batPct">78%</span></div>
+                <p class="note">
+                  Each bar is a real history sample (same buffers as sparklines).
+                  Height maps 0–100% from bottom to top of the lane.
+                </p>
+              </aside>
+            </div>
+
+            <div class="pf-foot">
+              <span>Status <b id="pf-status" class="status-ok">Healthy</b></span>
+              <span>CPU <b id="pf-hud-cpu">18%</b></span>
+              <span>Mem <b id="pf-hud-mem">42%</b></span>
+              <span>Net <b id="pf-hud-net">0.5M</b></span>
+              <span>Bars <b id="pf-hud-n">0</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OPTION 1 ========== -->
+    <section class="option" id="strip">
+      <div class="meta">
+        <span class="tag">Practical default</span>
+        <h2>Honest Spark Strip</h2>
+        <p>
+          Closest to shipping Vitals with purposeful motion.
+          Each row is label + live value + sparkline of <em>real retained samples</em> + detail.
+          Digits use numeric transitions only when the sample changes.
+        </p>
+        <table class="bind-table">
+          <thead><tr><th>Metric</th><th>What animates</th></tr></thead>
+          <tbody>
+            <tr><td><span class="swatch" style="background:var(--cpu)"></span>CPU</td><td>Sparkline = <code>cpuValues()</code> history; number crossfades on tick</td></tr>
+            <tr><td><span class="swatch" style="background:var(--mem)"></span>Memory</td><td>Sparkline = memory fraction history; detail = used bytes</td></tr>
+            <tr><td><span class="swatch" style="background:var(--net)"></span>Down / Up</td><td>Sparkline = rate history (self-scaled to peak in window)</td></tr>
+            <tr><td><span class="swatch" style="background:var(--bat)"></span>Battery</td><td>Sparkline = level history (flat on AC desktop)</td></tr>
+            <tr><td>AI tokens</td><td>Bar width = share of today’s total; no shimmer unless sessions update</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main · data-bound sparklines</span>
+            <span class="live-pill">Driven by controls</span>
+          </div>
+          <div class="window s1">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="body">
+              <div class="title">System</div>
+              <div class="strip">
+                <div class="row">
+                  <span class="name">CPU</span>
+                  <span class="num" style="color:var(--cpu)" data-bind="cpuPct">18%</span>
+                  <div class="spark-box"><canvas data-series="cpu" data-color="#6eb0ff"></canvas></div>
+                  <span class="detail">Load <span data-bind="load">1.20</span></span>
+                </div>
+                <div class="row">
+                  <span class="name">Memory</span>
+                  <span class="num" style="color:var(--mem)" data-bind="memPct">42%</span>
+                  <div class="spark-box"><canvas data-series="mem" data-color="#ff9a5c"></canvas></div>
+                  <span class="detail" data-bind="memDetail">13.4 GB</span>
+                </div>
+                <div class="row">
+                  <span class="name">Disk</span>
+                  <span class="num" style="color:var(--disk)" data-bind="diskPct">38%</span>
+                  <div class="spark-box"><canvas data-series="disk" data-color="#8ab4ff"></canvas></div>
+                  <span class="detail">Free space</span>
+                </div>
+                <div class="row">
+                  <span class="name">Down</span>
+                  <span class="num" style="color:var(--net)" data-bind="downRate">0.4M</span>
+                  <div class="spark-box"><canvas data-series="down" data-color="#5ce1ff" data-rate="1"></canvas></div>
+                  <span class="detail">en0</span>
+                </div>
+                <div class="row">
+                  <span class="name">Up</span>
+                  <span class="num" style="color:var(--up)" data-bind="upRate">0.1M</span>
+                  <div class="spark-box"><canvas data-series="up" data-color="#c4a0ff" data-rate="1"></canvas></div>
+                  <span class="detail">en0</span>
+                </div>
+                <div class="row">
+                  <span class="name">Battery</span>
+                  <span class="num" style="color:var(--bat)" data-bind="batPct">78%</span>
+                  <div class="spark-box"><canvas data-series="bat" data-color="#5dff9a"></canvas></div>
+                  <span class="detail" data-bind="batDetail">On battery</span>
+                </div>
+              </div>
+              <div class="foot">
+                <div class="foot-card">
+                  <div class="k">AI today</div>
+                  <div class="v">474K tok</div>
+                  <div class="bar"><i id="ai-bar" style="width:68%"></i></div>
+                </div>
+                <div class="foot-card">
+                  <div class="k">Top process</div>
+                  <div class="v" data-bind="topProc">WindowServer</div>
+                </div>
+                <div class="foot-card">
+                  <div class="k">Thermal</div>
+                  <div class="v" data-bind="thermal">Nominal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="menu-demo">
+          <div class="menu-pop">
+            <div class="mh"><span>System</span><span class="dot"></span></div>
+            <div class="mr">
+              <span>CPU</span>
+              <span style="color:var(--cpu);font-weight:600" data-bind="cpuPct">18%</span>
+              <div class="spark-mini"><canvas data-series="cpu" data-color="#6eb0ff"></canvas></div>
+              <span style="color:#6b7280" data-bind="load">1.20</span>
+            </div>
+            <div class="mr">
+              <span>Mem</span>
+              <span style="color:var(--mem);font-weight:600" data-bind="memPct">42%</span>
+              <div class="spark-mini"><canvas data-series="mem" data-color="#ff9a5c"></canvas></div>
+              <span style="color:#6b7280" data-bind="memShort">13.4G</span>
+            </div>
+            <div class="mr">
+              <span>Down</span>
+              <span style="color:var(--net);font-weight:600" data-bind="downRate">0.4M</span>
+              <div class="spark-mini"><canvas data-series="down" data-color="#5ce1ff" data-rate="1"></canvas></div>
+              <span style="color:#6b7280">en0</span>
+            </div>
+            <div class="mr">
+              <span>Bat</span>
+              <span style="color:var(--bat);font-weight:600" data-bind="batPct">78%</span>
+              <div class="spark-mini"><canvas data-series="bat" data-color="#5dff9a"></canvas></div>
+              <span style="color:#6b7280" data-bind="batShort">78%</span>
+            </div>
+            <div class="mf"><span>◎</span><span>❚❚</span><span>⚙</span><span>⏻</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OPTION 2 ========== -->
+    <section class="option" id="rings">
+      <div class="meta">
+        <span class="tag">Radial · still honest</span>
+        <h2>Bound Orbital</h2>
+        <p>
+          Same orbital idea as before, but arcs and spin are strictly metric-bound:
+          arc length = level, rotation speed = recent change rate (activity), not a constant spin.
+          Idle machine → rings almost still. Compile spike → CPU arc grows and ticks faster briefly.
+        </p>
+        <table class="bind-table">
+          <thead><tr><th>Ring</th><th>Binding</th></tr></thead>
+          <tbody>
+            <tr><td>Outer CPU</td><td>Arc = cpu% · spin rpm ∝ |Δcpu| over last 5s</td></tr>
+            <tr><td>Memory</td><td>Arc = mem% · slow spin only when climbing</td></tr>
+            <tr><td>Network</td><td>Arc = down/peak · spin ∝ down+up rate</td></tr>
+            <tr><td>Battery</td><td>Arc = bat% · spin ≈ 0 (level is slow)</td></tr>
+            <tr><td>Core</td><td>Shows CPU; glow radius ∝ cpu%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main · bound rings</span>
+            <span class="live-pill">Arc + spin = usage</span>
+          </div>
+          <div class="window s2">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="orbit-stage">
+              <div class="orbit-wrap" id="orbit-wrap">
+                <svg class="ring-svg" viewBox="0 0 280 280">
+                  <!-- track rings -->
+                  <circle cx="140" cy="140" r="128" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+                  <circle cx="140" cy="140" r="104" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+                  <circle cx="140" cy="140" r="80" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+                  <circle cx="140" cy="140" r="56" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+                  <!-- value arcs (rotated groups for activity spin) -->
+                  <g id="arc-cpu-g">
+                    <circle id="arc-cpu" cx="140" cy="140" r="128" fill="none" stroke="#6eb0ff" stroke-width="4"
+                      stroke-linecap="round" stroke-dasharray="0 804" transform="rotate(-90 140 140)"/>
+                  </g>
+                  <g id="arc-mem-g">
+                    <circle id="arc-mem" cx="140" cy="140" r="104" fill="none" stroke="#ff9a5c" stroke-width="4"
+                      stroke-linecap="round" stroke-dasharray="0 654" transform="rotate(-90 140 140)"/>
+                  </g>
+                  <g id="arc-net-g">
+                    <circle id="arc-net" cx="140" cy="140" r="80" fill="none" stroke="#5ce1ff" stroke-width="3.5"
+                      stroke-linecap="round" stroke-dasharray="0 503" transform="rotate(-90 140 140)"/>
+                  </g>
+                  <g id="arc-bat-g">
+                    <circle id="arc-bat" cx="140" cy="140" r="56" fill="none" stroke="#5dff9a" stroke-width="3.5"
+                      stroke-linecap="round" stroke-dasharray="0 352" transform="rotate(-90 140 140)"/>
+                  </g>
+                </svg>
+                <div class="core">
+                  <div class="core-inner" id="core-inner">
+                    <div class="pct" data-bind="cpuPct">18%</div>
+                    <div class="lbl">CPU</div>
+                  </div>
+                </div>
+              </div>
+              <div class="legend">
+                <span class="l-cpu">CPU</span>
+                <span class="l-mem">Mem</span>
+                <span class="l-net">Net</span>
+                <span class="l-bat">Bat</span>
+              </div>
+            </div>
+            <aside class="side">
+              <h3>Live values</h3>
+              <div class="srow">
+                <span class="n"><span class="dot" style="background:var(--cpu)" id="dot-cpu"></span>CPU</span>
+                <span class="v" style="color:var(--cpu)" data-bind="cpuPct">18%</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="dot" style="background:var(--mem)" id="dot-mem"></span>Memory</span>
+                <span class="v" style="color:var(--mem)" data-bind="memPct">42%</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="dot" style="background:var(--net)" id="dot-net"></span>Down</span>
+                <span class="v" style="color:var(--net)" data-bind="downRate">0.4M</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="dot" style="background:var(--bat)" id="dot-bat"></span>Battery</span>
+                <span class="v" style="color:var(--bat)" data-bind="batPct">78%</span>
+              </div>
+              <h3>Derived</h3>
+              <div class="srow"><span class="n">CPU activity</span><span class="v" data-bind="cpuAct">Low</span></div>
+              <div class="srow"><span class="n">Net activity</span><span class="v" data-bind="netAct">Low</span></div>
+              <div class="srow"><span class="n">Thermal</span><span class="v" data-bind="thermal">Nominal</span></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OPTION 3 ========== -->
+    <section class="option" id="field">
+      <div class="meta">
+        <span class="tag">Chart-first</span>
+        <h2>Activity Field</h2>
+        <p>
+          One multi-series chart filled from history buffers — the same data as today’s
+          System Activity panel, but as the visual hero. No independent “ambient” layers.
+          Amplitude and shape come only from samples.
+        </p>
+        <table class="bind-table">
+          <thead><tr><th>Series</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>Blue</td><td><code>cpuValues()</code> · 0–1 unit scale</td></tr>
+            <tr><td>Orange</td><td><code>memoryValues()</code> · 0–1</td></tr>
+            <tr><td>Cyan</td><td><code>downloadValues()</code> · peak-normalized in window</td></tr>
+            <tr><td>Violet</td><td><code>uploadValues()</code> · peak-normalized</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main · history field</span>
+            <span class="live-pill">Append-only samples</span>
+          </div>
+          <div class="window s3">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="body">
+              <div class="title">System activity · 1H</div>
+              <div class="field">
+                <div class="field-legend">
+                  <span><i style="background:var(--cpu)"></i>CPU</span>
+                  <span><i style="background:var(--mem)"></i>Memory</span>
+                  <span><i style="background:var(--net)"></i>Down*</span>
+                  <span><i style="background:var(--up)"></i>Up*</span>
+                </div>
+                <canvas id="field-chart"></canvas>
+              </div>
+              <div class="readout-row bottom-readouts">
+                <div class="readout">
+                  <div class="lab">CPU</div>
+                  <div class="val" style="color:var(--cpu)" data-bind="cpuPct">18%</div>
+                  <div class="sub">Load <span data-bind="load">1.20</span></div>
+                </div>
+                <div class="readout">
+                  <div class="lab">Memory</div>
+                  <div class="val" style="color:var(--mem)" data-bind="memPct">42%</div>
+                  <div class="sub" data-bind="memDetail">13.4 GB</div>
+                </div>
+                <div class="readout">
+                  <div class="lab">Network</div>
+                  <div class="val" style="color:var(--net)" data-bind="downRate">0.4M</div>
+                  <div class="sub">↑ <span data-bind="upRate">0.1M</span></div>
+                </div>
+                <div class="readout">
+                  <div class="lab">Battery</div>
+                  <div class="val" style="color:var(--bat)" data-bind="batPct">78%</div>
+                  <div class="sub" data-bind="batDetail">On battery</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OPTION 4 ========== -->
+    <section class="option" id="meters">
+      <div class="meta">
+        <span class="tag">Light · transition-only motion</span>
+        <h2>Filled Meters</h2>
+        <p>
+          Bars and sparklines only. Motion = fill width easing to the new sample,
+          plus a one-shot sheen when the value changes by more than a threshold.
+          Still when steady. Loud only when usage jumps.
+        </p>
+        <table class="bind-table">
+          <thead><tr><th>Element</th><th>Binding</th></tr></thead>
+          <tbody>
+            <tr><td>Bar fill</td><td>width = current % (or rate/peak)</td></tr>
+            <tr><td>Sheen</td><td>plays once if |Δ| &gt; 3pts in a sample</td></tr>
+            <tr><td>Sparkline</td><td>history buffer only</td></tr>
+            <tr><td>Number</td><td><code>contentTransition(.numericText)</code> on change</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label" style="background:#ebe8e0;color:#6b665c;border-color:#ddd9cf">
+            <span>Main · light meters</span>
+            <span class="live-pill" style="color:#16a34a">Motion on delta only</span>
+          </div>
+          <div class="window s4">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="body">
+              <div class="title">Overview</div>
+              <div class="meters">
+                <div class="meter">
+                  <div class="meter-head">
+                    <span class="name">CPU</span>
+                    <span class="num" style="color:#2563eb" data-bind="cpuPct">18%</span>
+                  </div>
+                  <div class="track"><div class="fill" id="fill-cpu" style="background:#2563eb"></div></div>
+                  <div class="spark-inline"><canvas data-series="cpu" data-color="#2563eb" data-light="1"></canvas></div>
+                  <div class="meta-line"><span>Load average</span><span data-bind="load">1.20</span></div>
+                </div>
+                <div class="meter">
+                  <div class="meter-head">
+                    <span class="name">Memory</span>
+                    <span class="num" style="color:#ea580c" data-bind="memPct">42%</span>
+                  </div>
+                  <div class="track"><div class="fill" id="fill-mem" style="background:#ea580c"></div></div>
+                  <div class="spark-inline"><canvas data-series="mem" data-color="#ea580c" data-light="1"></canvas></div>
+                  <div class="meta-line"><span>Used</span><span data-bind="memDetail">13.4 GB</span></div>
+                </div>
+                <div class="two-col">
+                  <div class="meter">
+                    <div class="meter-head">
+                      <span class="name">Download</span>
+                      <span class="num" style="color:#0284c7" data-bind="downRate">0.4M</span>
+                    </div>
+                    <div class="track"><div class="fill" id="fill-down" style="background:#0284c7"></div></div>
+                    <div class="spark-inline"><canvas data-series="down" data-color="#0284c7" data-rate="1" data-light="1"></canvas></div>
+                  </div>
+                  <div class="meter">
+                    <div class="meter-head">
+                      <span class="name">Battery</span>
+                      <span class="num" style="color:#16a34a" data-bind="batPct">78%</span>
+                    </div>
+                    <div class="track"><div class="fill" id="fill-bat" style="background:#16a34a"></div></div>
+                    <div class="spark-inline"><canvas data-series="bat" data-color="#16a34a" data-light="1"></canvas></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="contract" id="contract">
+    <h2>Motion contract for Vitals</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;max-width:70ch">
+      Use this as the rule set when implementing any of the layouts (A–D) or motion skins (strip / rings / field / meters / particles).
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Must bind to</th>
+          <th class="good">Do</th>
+          <th class="bad">Don’t</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sparkline / chart path</td>
+          <td>History arrays (<code>cpuValues()</code>, etc.)</td>
+          <td class="good">Append sample each poll; draw only real points</td>
+          <td class="bad">Math.sin loops, Perlin ambient, “alive” noise</td>
+        </tr>
+        <tr>
+          <td>Bar / ring arc length</td>
+          <td>Current fraction or rate/peak</td>
+          <td class="good">Ease width/arc to new value on sample</td>
+          <td class="bad">Indeterminate progress spinners for known levels</td>
+        </tr>
+        <tr>
+          <td>Spin / pulse rate</td>
+          <td>|Δvalue| or rate magnitude</td>
+          <td class="good">Near-zero motion when idle; faster when changing</td>
+          <td class="bad">Constant 12s rotation regardless of load</td>
+        </tr>
+        <tr>
+          <td>Number transitions</td>
+          <td>Last sample vs previous</td>
+          <td class="good"><code>numericText</code> only when value changes</td>
+          <td class="bad">Odometer rolling forever</td>
+        </tr>
+        <tr>
+          <td>Color intensity / glow</td>
+          <td>Level vs thresholds (warn / critical)</td>
+          <td class="good">Escalate at your alert thresholds</td>
+          <td class="bad">Rainbow cycling, random hue shift</td>
+        </tr>
+        <tr>
+          <td>GPU / NPU visuals</td>
+          <td>Availability only (today)</td>
+          <td class="good">Static “Detected” / flat line</td>
+          <td class="bad">Fake utilization waveforms</td>
+        </tr>
+        <tr>
+          <td>AI token bar</td>
+          <td>Tokens today / sessions</td>
+          <td class="good">Width from measured tokens; update on scan</td>
+          <td class="bad">Shimmer while idle between scans</td>
+        </tr>
+        <tr>
+          <td>Particle Flow field</td>
+          <td>3 bar charts from history · height 0–100% · bat dims</td>
+          <td class="good">One bar per sample slot; L=old R=now</td>
+          <td class="bad">Decorative particles / random gaps</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer style="max-width:1280px;margin:36px auto 0;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.7">
+    Drag presets and sliders — strip, rings, field, meters, and menu all share one sample state.
+    File: <code>macos/vitals/design-options/data-driven.html</code>
+    · Layout explorations: <a href="index.html">index.html</a>
+  </footer>
+
+  <script>
+    // ========== Shared sample state ==========
+    const state = {
+      cpu: 0.18,
+      mem: 0.42,
+      disk: 0.38,
+      down: 0.4,   // MB/s display units for mock
+      up: 0.1,
+      bat: 0.78,
+      // history buffers (unit 0–1 for cpu/mem/disk/bat; raw rates for net)
+      hist: {
+        cpu: [],
+        mem: [],
+        disk: [],
+        down: [],
+        up: [],
+        bat: [],
+      },
+      prev: {},
+      spin: { cpu: 0, mem: 0, net: 0, bat: 0 },
+      activity: { cpu: 0, mem: 0, net: 0 },
+    };
+
+    const HIST_LEN = 60;
+    // seed flat history
+    ['cpu','mem','disk','bat'].forEach((k) => {
+      for (let i = 0; i < HIST_LEN; i++) state.hist[k].push(state[k]);
+    });
+    for (let i = 0; i < HIST_LEN; i++) {
+      state.hist.down.push(state.down);
+      state.hist.up.push(state.up);
+    }
+    state.prev = { cpu: state.cpu, mem: state.mem, disk: state.disk, down: state.down, up: state.up, bat: state.bat };
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    function fmtPct(v) { return Math.round(v * 100) + '%'; }
+    function fmtRate(mbs) {
+      if (mbs < 0.05) return (mbs * 1024).toFixed(0) + 'K';
+      if (mbs < 10) return mbs.toFixed(1) + 'M';
+      return mbs.toFixed(0) + 'M';
+    }
+    function fmtMem(frac) {
+      const gb = (frac * 32).toFixed(1); // assume 32GB machine for mock
+      return gb + ' GB';
+    }
+    function loadFromCpu(cpu) {
+      // rough mock: load ~ cpu * cores/100 * factor
+      return (cpu * 8 * 0.85 + 0.15).toFixed(2);
+    }
+    function activityLabel(level) {
+      if (level < 0.05) return 'Idle';
+      if (level < 0.2) return 'Low';
+      if (level < 0.5) return 'Moderate';
+      return 'High';
+    }
+    function thermalFrom(cpu, mem) {
+      if (cpu > 0.85 || mem > 0.92) return 'Serious';
+      if (cpu > 0.65) return 'Fair';
+      return 'Nominal';
+    }
+    function topProc(cpu) {
+      if (cpu > 0.7) return 'swift-frontend';
+      if (cpu > 0.4) return 'Cursor';
+      if (cpu > 0.2) return 'Chrome';
+      return 'WindowServer';
+    }
+
+    function readSliders() {
+      state.cpu = $('#cpu').valueAsNumber / 100;
+      state.mem = $('#mem').valueAsNumber / 100;
+      state.disk = $('#disk').valueAsNumber / 100;
+      state.down = $('#down').valueAsNumber; // MB/s
+      state.up = $('#up').valueAsNumber;   // MB/s
+      state.bat = $('#bat').valueAsNumber / 100;
+    }
+
+    function updateLabels() {
+      $('#lbl-cpu').textContent = fmtPct(state.cpu);
+      $('#lbl-mem').textContent = fmtPct(state.mem);
+      $('#lbl-disk').textContent = fmtPct(state.disk);
+      $('#lbl-down').textContent = state.down.toFixed(1);
+      $('#lbl-up').textContent = state.up.toFixed(1);
+      $('#lbl-bat').textContent = fmtPct(state.bat);
+    }
+
+    function pushHistory() {
+      // sample current into history (poll simulation)
+      const map = {
+        cpu: state.cpu,
+        mem: state.mem,
+        disk: state.disk,
+        down: state.down,
+        up: state.up,
+        bat: state.bat,
+      };
+      Object.keys(map).forEach((k) => {
+        state.hist[k].push(map[k]);
+        if (state.hist[k].length > HIST_LEN) state.hist[k].shift();
+      });
+
+      // activity = recent absolute delta
+      const dCpu = Math.abs(state.cpu - state.prev.cpu);
+      const dMem = Math.abs(state.mem - state.prev.mem);
+      const dNet = Math.abs(state.down - state.prev.down) / 50 + Math.abs(state.up - state.prev.up) / 20;
+      state.activity.cpu = state.activity.cpu * 0.75 + dCpu * 4;
+      state.activity.mem = state.activity.mem * 0.8 + dMem * 3;
+      state.activity.net = state.activity.net * 0.7 + Math.min(1, state.down / 25 + state.up / 10) * 0.5 + dNet;
+
+      // spin accumulates based on activity (deg)
+      state.spin.cpu += state.activity.cpu * 18 + state.cpu * 0.4;
+      state.spin.mem += state.activity.mem * 10 + (state.mem > 0.01 ? 0.15 : 0);
+      state.spin.net += state.activity.net * 22 + (state.down + state.up) * 0.08;
+      state.spin.bat += 0.05; // almost still
+
+      state.prev = { cpu: state.cpu, mem: state.mem, disk: state.disk, down: state.down, up: state.up, bat: state.bat };
+    }
+
+    function bindTexts() {
+      const vals = {
+        cpuPct: fmtPct(state.cpu),
+        memPct: fmtPct(state.mem),
+        diskPct: fmtPct(state.disk),
+        batPct: fmtPct(state.bat),
+        downRate: fmtRate(state.down),
+        upRate: fmtRate(state.up),
+        load: loadFromCpu(state.cpu),
+        memDetail: fmtMem(state.mem),
+        memShort: (state.mem * 32).toFixed(1) + 'G',
+        batDetail: state.bat < 0.2 ? 'Low · plug in' : 'On battery',
+        batShort: fmtPct(state.bat),
+        thermal: thermalFrom(state.cpu, state.mem),
+        topProc: topProc(state.cpu),
+        cpuAct: activityLabel(state.activity.cpu),
+        netAct: activityLabel(state.activity.net + state.down / 40),
+      };
+      $$('[data-bind]').forEach((el) => {
+        const key = el.getAttribute('data-bind');
+        if (vals[key] != null && el.textContent !== String(vals[key])) {
+          el.textContent = vals[key];
+        }
+      });
+    }
+
+    // ========== Sparklines from history ==========
+    function resizeCanvas(canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rect.width * dpr));
+      const h = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h, dpr };
+    }
+
+    function drawSpark(canvas) {
+      const series = canvas.dataset.series;
+      const color = canvas.dataset.color || '#6eb0ff';
+      const isRate = canvas.dataset.rate === '1';
+      const pts = state.hist[series];
+      if (!pts || !pts.length) return;
+      const { w, h, dpr } = resizeCanvas(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+
+      let norm;
+      if (isRate) {
+        const peak = Math.max(...pts, 0.05);
+        norm = pts.map((v) => v / peak);
+      } else {
+        // unit series 0–1, leave headroom
+        norm = pts.map((v) => v);
+      }
+
+      ctx.beginPath();
+      norm.forEach((v, i) => {
+        const x = (i / (norm.length - 1)) * w;
+        const y = h - (0.12 * h + v * 0.76 * h);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    function drawAllSparks() {
+      $$('canvas[data-series]').forEach(drawSpark);
+    }
+
+    // ========== Field chart ==========
+    function drawField() {
+      const canvas = $('#field-chart');
+      if (!canvas) return;
+      const { w, h, dpr } = resizeCanvas(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+
+      // grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const y = (i / 4) * h;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      function series(pts, color, rate) {
+        let norm;
+        if (rate) {
+          const peak = Math.max(...pts, 0.05);
+          norm = pts.map((v) => v / peak);
+        } else {
+          norm = pts.map((v) => Math.min(1, Math.max(0, v)));
+        }
+        ctx.beginPath();
+        norm.forEach((v, i) => {
+          const x = (i / (norm.length - 1)) * w;
+          const y = h - v * h * 0.9 - h * 0.05;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6 * dpr;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+
+      series(state.hist.cpu, 'rgba(110,176,255,0.95)', false);
+      series(state.hist.mem, 'rgba(255,154,92,0.9)', false);
+      series(state.hist.down, 'rgba(92,225,255,0.85)', true);
+      series(state.hist.up, 'rgba(196,160,255,0.8)', true);
+    }
+
+    // ========== Bound rings ==========
+    function setArc(id, radius, fraction) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const c = 2 * Math.PI * radius;
+      const f = Math.min(1, Math.max(0, fraction));
+      el.setAttribute('stroke-dasharray', `${f * c} ${c}`);
+    }
+
+    function updateRings() {
+      setArc('arc-cpu', 128, state.cpu);
+      setArc('arc-mem', 104, state.mem);
+      // network arc = download relative to 50 MB/s mock peak
+      setArc('arc-net', 80, Math.min(1, state.down / 25));
+      setArc('arc-bat', 56, state.bat);
+
+      const cpuG = $('#arc-cpu-g');
+      const memG = $('#arc-mem-g');
+      const netG = $('#arc-net-g');
+      const batG = $('#arc-bat-g');
+      if (cpuG) cpuG.setAttribute('transform', `rotate(${state.spin.cpu} 140 140)`);
+      if (memG) memG.setAttribute('transform', `rotate(${state.spin.mem} 140 140)`);
+      if (netG) netG.setAttribute('transform', `rotate(${state.spin.net} 140 140)`);
+      if (batG) batG.setAttribute('transform', `rotate(${state.spin.bat} 140 140)`);
+
+      const core = $('#core-inner');
+      if (core) {
+        const g = 20 + state.cpu * 50;
+        core.style.boxShadow = `0 0 ${g}px rgba(110,176,255,${0.1 + state.cpu * 0.25}), inset 0 0 20px rgba(110,176,255,0.08)`;
+        core.style.transform = `scale(${1 + state.cpu * 0.06})`;
+      }
+
+      // dots scale with activity
+      const setDot = (id, act) => {
+        const d = document.getElementById(id);
+        if (!d) return;
+        const s = 1 + Math.min(1.2, act * 2);
+        d.style.transform = `scale(${s})`;
+        d.style.opacity = String(0.5 + Math.min(0.5, act));
+      };
+      setDot('dot-cpu', state.activity.cpu + state.cpu * 0.2);
+      setDot('dot-mem', state.activity.mem + state.mem * 0.1);
+      setDot('dot-net', state.activity.net);
+      setDot('dot-bat', 0.15);
+    }
+
+    // ========== Meters ==========
+    const lastFill = { cpu: -1, mem: -1, down: -1, bat: -1 };
+    function updateMeters() {
+      const setFill = (id, key, frac) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const pct = Math.round(frac * 1000) / 10;
+        el.style.width = pct + '%';
+        if (lastFill[key] >= 0 && Math.abs(frac - lastFill[key]) > 0.03) {
+          el.classList.remove('active');
+          void el.offsetWidth;
+          el.classList.add('active');
+        }
+        lastFill[key] = frac;
+      };
+      setFill('fill-cpu', 'cpu', state.cpu);
+      setFill('fill-mem', 'mem', state.mem);
+      setFill('fill-down', 'down', Math.min(1, state.down / 25));
+      setFill('fill-bat', 'bat', state.bat);
+    }
+
+    // ========== Particle Flow field → history bar charts ==========
+    // Each lane: vertical bars from recent samples (left=older, right=now).
+    // Height: 0% at bottom of lane → 100% at top. No particles.
+    const LANE_SERIES = ['cpu', 'mem', 'down'];
+    const BAR_COUNT = 48; // bars per lane (even slots across history)
+
+    /** Normalized history series 0–1 */
+    function historyNorm(seriesKey) {
+      const pts = state.hist[seriesKey];
+      if (!pts || !pts.length) return [0];
+      if (seriesKey === 'down' || seriesKey === 'up') {
+        const peak = Math.max(...pts, 0.05);
+        return pts.map((v) => Math.min(1, Math.max(0, v / peak)));
+      }
+      return pts.map((v) => Math.min(1, Math.max(0, v)));
+    }
+
+    /** Sample history at x∈[0,1] — 0 oldest, 1 newest */
+    function sampleHistoryAt(seriesKey, x) {
+      const norm = historyNorm(seriesKey);
+      if (norm.length === 1) return norm[0];
+      const t = Math.min(1, Math.max(0, x)) * (norm.length - 1);
+      const i0 = Math.floor(t);
+      const i1 = Math.min(norm.length - 1, i0 + 1);
+      const f = t - i0;
+      return norm[i0] * (1 - f) + norm[i1] * f;
+    }
+
+    function particleTargets() {
+      const brightness = state.bat < 0.2
+        ? 0.4 + state.bat * 1.4
+        : 0.85 + state.bat * 0.15;
+      return {
+        barCount: BAR_COUNT,
+        total: BAR_COUNT * 3,
+        brightness,
+        nCpu: BAR_COUNT,
+        nMem: BAR_COUNT,
+        nNet: BAR_COUNT,
+      };
+    }
+
+    function laneYRange(lane) {
+      const top = lane / 3;
+      const bot = (lane + 1) / 3;
+      const pad = 0.06; // leave room for baseline
+      return { y0: top + pad * 0.35, y1: bot - pad * 0.15 };
+    }
+
+    function setWidth(id, frac) {
+      const el = document.getElementById(id);
+      if (el) el.style.width = Math.round(Math.min(1, Math.max(0, frac)) * 1000) / 10 + '%';
+    }
+
+    function updateParticleHud(t) {
+      const set = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+      };
+      setWidth('pf-bar-cpu', state.cpu);
+      setWidth('pf-bar-mem', state.mem);
+      setWidth('pf-bar-net', Math.min(1, state.down / 25));
+      setWidth('pf-bar-bat', state.bat);
+
+      set('pf-hud-n', String(t.total));
+      set('pf-hud-cpu', fmtPct(state.cpu));
+      set('pf-hud-net', fmtRate(state.down + state.up));
+      set('pf-hud-mem', fmtPct(state.mem));
+
+      const status = document.getElementById('pf-status');
+      if (status) {
+        let label = 'Healthy';
+        let cls = 'status-ok';
+        if (state.bat < 0.2) { label = 'Low battery'; cls = 'status-warn'; }
+        else if (state.mem > 0.9) { label = 'Memory pressure'; cls = 'status-warn'; }
+        else if (state.cpu > 0.85) { label = 'CPU heavy'; cls = 'status-warn'; }
+        else if (state.down > 30) { label = 'Network busy'; cls = 'status-ok'; }
+        else if (state.cpu < 0.15 && state.down < 1) { label = 'Idle'; cls = 'status-ok'; }
+        status.textContent = label;
+        status.className = cls;
+      }
+    }
+
+    // No per-frame particle sim — bars redraw from history
+    function stepParticles(_dt) {
+      return particleTargets();
+    }
+
+    function drawParticles() {
+      const canvas = document.getElementById('particle-flow');
+      if (!canvas) return;
+      const t = particleTargets();
+      const { w, h, dpr } = resizeCanvas(canvas);
+      const ctx = canvas.getContext('2d');
+
+      // Solid clear — bar charts shouldn't smear
+      ctx.fillStyle = '#080a10';
+      ctx.fillRect(0, 0, w, h);
+
+      const laneTints = [
+        [110, 176, 255, 0.05],
+        [255, 154, 92, 0.05],
+        [92, 225, 255, 0.05],
+      ];
+      const colors = [
+        [110, 176, 255],
+        [255, 154, 92],
+        [92, 225, 255],
+      ];
+
+      for (let lane = 0; lane < 3; lane++) {
+        const laneTop = (lane / 3) * h;
+        const laneH = h / 3;
+        const [tr, tg, tb, ta] = laneTints[lane];
+        ctx.fillStyle = `rgba(${tr},${tg},${tb},${ta})`;
+        ctx.fillRect(0, laneTop, w, laneH);
+        if (lane > 0) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, laneTop);
+          ctx.lineTo(w, laneTop);
+          ctx.stroke();
+        }
+      }
+
+      const gutter = Math.min(w * 0.16, 100 * dpr);
+      const rightPad = 10 * dpr;
+      const drawW = w - gutter - rightPad;
+      const n = t.barCount;
+      const gap = Math.max(1, 2 * dpr);
+      const barW = Math.max(2, (drawW - gap * (n - 1)) / n);
+
+      for (let lane = 0; lane < 3; lane++) {
+        const { y0, y1 } = laneYRange(lane);
+        const laneTopPx = y0 * h;
+        const laneBotPx = y1 * h;
+        const laneSpan = laneBotPx - laneTopPx;
+        const series = LANE_SERIES[lane];
+        const [r, g, b] = colors[lane];
+
+        // baseline
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gutter, laneBotPx);
+        ctx.lineTo(gutter + drawW, laneBotPx);
+        ctx.stroke();
+
+        for (let i = 0; i < n; i++) {
+          // left = oldest, right = newest
+          const xNorm = n === 1 ? 1 : i / (n - 1);
+          const value = sampleHistoryAt(series, xNorm);
+          const barH = Math.max(1.5 * dpr, value * laneSpan);
+          const x = gutter + i * (barW + gap);
+          const y = laneBotPx - barH;
+
+          // slight age fade: older bars a bit quieter
+          const age = i / Math.max(1, n - 1);
+          const alpha = (0.35 + age * 0.5) * t.brightness;
+
+          // rounded-ish bars via fillRect (fast) + top cap
+          ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+          ctx.beginPath();
+          const radius = Math.min(barW / 2, 3 * dpr);
+          const rr = Math.min(radius, barH / 2);
+          // simple round-rect
+          ctx.moveTo(x + rr, y);
+          ctx.lineTo(x + barW - rr, y);
+          ctx.quadraticCurveTo(x + barW, y, x + barW, y + rr);
+          ctx.lineTo(x + barW, laneBotPx);
+          ctx.lineTo(x, laneBotPx);
+          ctx.lineTo(x, y + rr);
+          ctx.quadraticCurveTo(x, y, x + rr, y);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      // "now" marker on the right
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4 * dpr, 4 * dpr]);
+      ctx.beginPath();
+      ctx.moveTo(gutter + drawW + gap, 0);
+      ctx.lineTo(gutter + drawW + gap, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (state.bat < 0.2) {
+        ctx.fillStyle = `rgba(0,0,0,${0.35 - state.bat})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      updateParticleHud(t);
+    }
+
+    let pfLast = performance.now();
+    function particleLoop(now) {
+      const dt = Math.min(48, now - pfLast);
+      pfLast = now;
+      stepParticles(dt);
+      drawParticles();
+      requestAnimationFrame(particleLoop);
+    }
+
+    // ========== Slider wiring ==========
+    let lastHistPush = 0;
+    function onSliderInput() {
+      readSliders();
+      updateLabels();
+      // Append history while dragging so particle waves track recent usage live
+      const now = performance.now();
+      if (now - lastHistPush > 80) {
+        pushHistory();
+        lastHistPush = now;
+      }
+      bindTexts();
+      updateRings();
+      updateMeters();
+      drawAllSparks();
+      drawField();
+      updateParticleHud(particleTargets());
+    }
+
+    $$('.sliders input').forEach((input) => {
+      input.addEventListener('input', onSliderInput);
+    });
+
+    const presets = {
+      idle: { cpu: 12, mem: 38, disk: 40, down: 0.2, up: 0.05, bat: 82 },
+      compile: { cpu: 92, mem: 68, disk: 42, down: 1.2, up: 0.3, bat: 71 },
+      browse: { cpu: 28, mem: 55, disk: 40, down: 8, up: 0.4, bat: 64 },
+      pressure: { cpu: 45, mem: 91, disk: 55, down: 2, up: 0.5, bat: 50 },
+      burst: { cpu: 35, mem: 48, disk: 40, down: 42, up: 12, bat: 70 },
+      lowbat: { cpu: 22, mem: 50, disk: 40, down: 1, up: 0.2, bat: 12 },
+    };
+
+    $$('[data-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $$('[data-preset]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const p = presets[btn.dataset.preset];
+        if (!p) return;
+        $('#cpu').value = p.cpu;
+        $('#mem').value = p.mem;
+        $('#disk').value = p.disk;
+        $('#down').value = p.down;
+        $('#up').value = p.up;
+        $('#bat').value = p.bat;
+        onSliderInput();
+        // inject a short ramp of samples so sparklines show the transition
+        for (let i = 0; i < 8; i++) {
+          setTimeout(() => {
+            pushHistory();
+            bindTexts();
+            updateRings();
+            updateMeters();
+            drawAllSparks();
+            drawField();
+          }, i * 80);
+        }
+      });
+    });
+
+    // poll loop = "monitor tick"
+    function tick() {
+      readSliders();
+      updateLabels();
+      pushHistory();
+      bindTexts();
+      updateRings();
+      updateMeters();
+      drawAllSparks();
+      drawField();
+    }
+
+    // initial
+    onSliderInput();
+    // seed a bit of natural variation from current slider as steady state
+    for (let i = 0; i < 20; i++) pushHistory();
+    tick();
+    setInterval(tick, 500);
+    requestAnimationFrame(particleLoop);
+
+    // redraw on resize
+    window.addEventListener('resize', () => {
+      drawAllSparks();
+      drawField();
+      drawParticles();
+    });
+  </script>
+</body>
+</html>

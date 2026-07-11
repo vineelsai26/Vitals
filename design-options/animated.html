@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vitals — Animated Redesign Options</title>
+  <style>
+    :root {
+      --page: #08090c;
+      --ink: #eceef3;
+      --muted: #8b909c;
+      --line: rgba(255,255,255,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--page);
+      color: var(--ink);
+      line-height: 1.45;
+      padding: 48px 40px 100px;
+    }
+    a { color: #8ab4ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page-header { max-width: 1320px; margin: 0 auto 36px; }
+    .page-header h1 {
+      font-size: 28px; font-weight: 600; letter-spacing: -0.03em;
+    }
+    .page-header p {
+      margin-top: 8px; color: var(--muted); max-width: 68ch; font-size: 14px;
+    }
+    .nav-links {
+      margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 12px;
+    }
+    .nav-links a {
+      color: #a0a6b4; border: 1px solid var(--line); border-radius: 999px;
+      padding: 5px 12px;
+    }
+    .nav-links a:hover { color: #fff; border-color: rgba(255,255,255,0.2); text-decoration: none; }
+
+    .options {
+      max-width: 1320px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 64px;
+    }
+    .option {
+      display: grid; grid-template-columns: 270px 1fr; gap: 28px; align-items: start;
+    }
+    .meta h2 {
+      font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px;
+    }
+    .meta .tag {
+      display: inline-block; font-size: 11px; font-weight: 500; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; margin-bottom: 12px;
+    }
+    .meta p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .meta ul {
+      list-style: none; font-size: 12.5px; color: #b4b8c2;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+    .meta li::before { content: "→ "; color: #6b7280; }
+    .meta .motion {
+      margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
+      font-size: 12px; color: #9ca3af;
+    }
+    .meta .motion strong { color: #d1d5db; display: block; margin-bottom: 4px; }
+    .stage {
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    }
+    .stage-label {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #6b7280; padding: 10px 14px; background: #0a0b0e;
+      border-bottom: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #3dd68c; letter-spacing: 0.1em; font-size: 9px;
+    }
+    .live-pill::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%;
+      background: #3dd68c; box-shadow: 0 0 8px #3dd68c;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .window {
+      width: 100%; min-height: 440px; position: relative; overflow: hidden;
+    }
+    .traffic {
+      display: flex; gap: 6px; position: absolute; top: 14px; left: 16px; z-index: 5;
+    }
+    .traffic i {
+      width: 10px; height: 10px; border-radius: 50%; display: block;
+    }
+    .traffic .r { background: #ff5f57; }
+    .traffic .y { background: #febc2e; }
+    .traffic .g { background: #28c840; }
+
+    /* ========== E: WAVEFIELD ========== */
+    .e {
+      background: #06080f;
+      color: #e8eefc;
+    }
+    .e canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    .e .overlay {
+      position: relative; z-index: 2;
+      padding: 48px 28px 24px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 440px;
+      background: linear-gradient(180deg, rgba(6,8,15,0.55) 0%, rgba(6,8,15,0.15) 40%, rgba(6,8,15,0.75) 100%);
+    }
+    .e .title-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 20px; padding-left: 40px;
+    }
+    .e h3 {
+      font-size: 13px; font-weight: 500; letter-spacing: 0.2em;
+      text-transform: uppercase; color: rgba(232,238,252,0.55);
+    }
+    .e .chips { display: flex; gap: 6px; }
+    .e .chip {
+      font-size: 10px; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.45);
+    }
+    .e .chip.on {
+      background: rgba(91,157,255,0.15); border-color: rgba(91,157,255,0.35);
+      color: #9ec0ff;
+    }
+    .e .float-metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      align-self: end; margin-bottom: 18px;
+    }
+    .e .fm {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(10,14,24,0.55);
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(16px);
+      animation: floatY 5s ease-in-out infinite;
+    }
+    .e .fm:nth-child(2) { animation-delay: -1.2s; }
+    .e .fm:nth-child(3) { animation-delay: -2.4s; }
+    .e .fm:nth-child(4) { animation-delay: -3.6s; }
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .e .fm .lab {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(232,238,252,0.45); margin-bottom: 6px;
+    }
+    .e .fm .val {
+      font-size: 30px; font-weight: 500; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+    }
+    .e .fm .val.cpu { color: #6eb0ff; }
+    .e .fm .val.mem { color: #ff9a5c; }
+    .e .fm .val.net { color: #5ce1ff; }
+    .e .fm .val.bat { color: #5dff9a; }
+    .e .fm .sub { font-size: 11px; color: rgba(232,238,252,0.4); margin-top: 4px; }
+    .e .footer-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; border-radius: 12px;
+      background: rgba(10,14,24,0.6); border: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: rgba(232,238,252,0.5);
+    }
+    .e .footer-bar b { color: rgba(232,238,252,0.85); font-weight: 500; }
+    .e .bar-track {
+      width: 120px; height: 3px; border-radius: 2px;
+      background: rgba(255,255,255,0.08); overflow: hidden; display: inline-block;
+      vertical-align: middle; margin: 0 8px;
+    }
+    .e .bar-track i {
+      display: block; height: 100%; width: 68%;
+      background: linear-gradient(90deg, #6eb0ff, #b28dff);
+      border-radius: 2px;
+      animation: barPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes barPulse {
+      0%, 100% { width: 62%; opacity: 0.85; }
+      50% { width: 74%; opacity: 1; }
+    }
+
+    /* ========== F: ORBITAL ========== */
+    .f {
+      background: radial-gradient(ellipse at 50% 42%, #12151f 0%, #07080c 70%);
+      color: #eef0f6;
+      display: grid;
+      grid-template-columns: 1fr 220px;
+    }
+    .f .orbit-stage {
+      position: relative;
+      display: grid; place-items: center;
+      min-height: 440px;
+    }
+    .f .orbit-wrap {
+      position: relative;
+      width: 300px; height: 300px;
+    }
+    .f .ring {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .f .ring svg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      overflow: visible;
+    }
+    .f .ring.r1 { inset: 0; animation: spin 18s linear infinite; }
+    .f .ring.r2 { inset: 28px; animation: spin 12s linear infinite reverse; }
+    .f .ring.r3 { inset: 56px; animation: spin 8s linear infinite; }
+    .f .ring.r4 { inset: 88px; animation: spin 14s linear infinite reverse; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .f .core {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      pointer-events: none;
+    }
+    .f .core-inner {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #1a2238, #0a0d14 70%);
+      border: 1px solid rgba(110,176,255,0.25);
+      display: grid; place-items: center;
+      box-shadow:
+        0 0 40px rgba(110,176,255,0.15),
+        inset 0 0 20px rgba(110,176,255,0.08);
+      animation: coreBreathe 3.2s ease-in-out infinite;
+    }
+    @keyframes coreBreathe {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(110,176,255,0.15), inset 0 0 20px rgba(110,176,255,0.08); }
+      50% { transform: scale(1.04); box-shadow: 0 0 56px rgba(110,176,255,0.28), inset 0 0 28px rgba(110,176,255,0.12); }
+    }
+    .f .core-inner .pct {
+      font-size: 28px; font-weight: 500; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+    .f .core-inner .lbl {
+      font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: rgba(238,240,246,0.45); margin-top: -2px;
+    }
+    .f .dot {
+      position: absolute; width: 8px; height: 8px; border-radius: 50%;
+      top: 50%; left: 50%; margin: -4px 0 0 -4px;
+    }
+    .f .side {
+      border-left: 1px solid rgba(255,255,255,0.06);
+      padding: 48px 18px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      background: rgba(0,0,0,0.25);
+    }
+    .f .side h3 {
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(238,240,246,0.4); margin-bottom: 4px;
+    }
+    .f .srow {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .f .srow .n { color: rgba(238,240,246,0.55); }
+    .f .srow .v {
+      font-variant-numeric: tabular-nums; font-weight: 500;
+    }
+    .f .pulse-dot {
+      width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+      margin-right: 8px; vertical-align: middle;
+      animation: pulseDot 1.8s ease-in-out infinite;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+    }
+    .f .orbit-label {
+      position: absolute;
+      font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(238,240,246,0.4);
+      animation: labelFade 4s ease-in-out infinite;
+    }
+    @keyframes labelFade {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 0.75; }
+    }
+
+    /* ========== G: SCOPE ========== */
+    .g {
+      background: #0b100e;
+      color: #c8f5d8;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    }
+    .g .scope-body {
+      padding: 42px 22px 18px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 440px; gap: 14px;
+    }
+    .g .scope-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding-left: 40px;
+    }
+    .g .scope-head h3 {
+      font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: #5a9a70; font-weight: 500;
+    }
+    .g .scope-head .readouts {
+      display: flex; gap: 16px; font-size: 10px; color: #4a7a58;
+    }
+    .g .scope-head .readouts b { color: #8fd9a8; font-weight: 500; }
+    .g .scope-screen {
+      position: relative;
+      border: 1px solid rgba(80,180,110,0.25);
+      border-radius: 4px;
+      background:
+        linear-gradient(rgba(40,120,60,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(40,120,60,0.04) 1px, transparent 1px),
+        #061008;
+      background-size: 24px 24px, 24px 24px, auto;
+      overflow: hidden;
+      min-height: 240px;
+      box-shadow: inset 0 0 40px rgba(0,40,10,0.5);
+    }
+    .g .scope-screen canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    .g .beam {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: linear-gradient(180deg, transparent, rgba(140,255,170,0.5), transparent);
+      box-shadow: 0 0 12px rgba(100,255,140,0.6);
+      animation: sweep 2.8s linear infinite;
+      z-index: 2;
+    }
+    @keyframes sweep {
+      from { left: 0; }
+      to { left: 100%; }
+    }
+    .g .scope-glow {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.35) 100%);
+      pointer-events: none; z-index: 1;
+    }
+    .g .channels {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    }
+    .g .ch {
+      border: 1px solid rgba(80,180,110,0.2);
+      border-radius: 3px;
+      padding: 8px 10px;
+      background: rgba(8,20,12,0.8);
+    }
+    .g .ch .lab { font-size: 9px; color: #4a7a58; letter-spacing: 0.1em; }
+    .g .ch .val {
+      font-size: 16px; color: #9eecc0; margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+      animation: tickFlash 3s steps(1) infinite;
+    }
+    .g .ch:nth-child(2) .val { animation-delay: 0.4s; color: #ffc07a; }
+    .g .ch:nth-child(3) .val { animation-delay: 0.8s; color: #7ad4ff; }
+    .g .ch:nth-child(4) .val { animation-delay: 1.2s; color: #d4a0ff; }
+    .g .ch:nth-child(5) .val { animation-delay: 1.6s; color: #9eecc0; }
+    @keyframes tickFlash {
+      0%, 90%, 100% { opacity: 1; }
+      92% { opacity: 0.55; }
+    }
+
+    /* ========== H: BREATHING CELLS ========== */
+    .h {
+      background: #f3f1ec;
+      color: #1a1814;
+    }
+    .h .inner {
+      padding: 44px 22px 20px;
+      min-height: 440px;
+    }
+    .h .head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; padding-left: 40px;
+    }
+    .h h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+    .h .range {
+      display: flex; gap: 4px; font-size: 10px; color: #8a857a;
+    }
+    .h .range span {
+      padding: 4px 8px; border-radius: 6px;
+    }
+    .h .range .on {
+      background: #fff; color: #1a1814; font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .h .cells {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      grid-template-rows: 160px 160px;
+      gap: 10px;
+    }
+    .h .cell {
+      border-radius: 18px;
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.04);
+      box-shadow: 0 8px 24px rgba(40,30,10,0.04);
+    }
+    .h .cell.big { grid-row: span 2; }
+    .h .cell .lab {
+      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #9a958a; position: relative; z-index: 1;
+    }
+    .h .cell .val {
+      font-size: 36px; font-weight: 500; letter-spacing: -0.04em;
+      margin-top: 8px; font-variant-numeric: tabular-nums;
+      position: relative; z-index: 1;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+    }
+    .h .cell .detail {
+      font-size: 11px; color: #9a958a; margin-top: 6px; position: relative; z-index: 1;
+    }
+    .h .blob {
+      position: absolute; border-radius: 50%;
+      filter: blur(28px); opacity: 0.55;
+      animation: blobMove 6s ease-in-out infinite;
+    }
+    .h .cell.cpu .blob {
+      width: 160px; height: 160px; background: #6eb0ff;
+      bottom: -40px; right: -30px;
+    }
+    .h .cell.mem .blob {
+      width: 100px; height: 100px; background: #ff9a5c;
+      bottom: -20px; right: -10px; animation-duration: 5s;
+    }
+    .h .cell.net .blob {
+      width: 90px; height: 90px; background: #5ce1c8;
+      bottom: -15px; right: -15px; animation-duration: 7s; animation-delay: -1s;
+    }
+    .h .cell.bat .blob {
+      width: 90px; height: 90px; background: #7ddea0;
+      bottom: -15px; right: -10px; animation-duration: 8s; animation-delay: -2s;
+    }
+    .h .cell.ai .blob {
+      width: 110px; height: 110px; background: #b28dff;
+      bottom: -25px; right: -20px; animation-duration: 5.5s;
+    }
+    @keyframes blobMove {
+      0%, 100% { transform: scale(1) translate(0, 0); }
+      33% { transform: scale(1.15) translate(-8px, -10px); }
+      66% { transform: scale(0.92) translate(6px, 4px); }
+    }
+    .h .cell.big .val { font-size: 56px; margin-top: 24px; color: #2563eb; }
+    .h .cell.big .wave {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+      z-index: 0; opacity: 0.9;
+    }
+    .h .cell.big .wave canvas { width: 100%; height: 100%; }
+
+    /* ========== I: KINETIC COUNTERS ========== */
+    .i {
+      background: #0e0f12;
+      color: #f0f1f4;
+    }
+    .i .inner {
+      padding: 48px 28px 24px;
+      min-height: 440px;
+    }
+    .i .head {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 28px; padding-left: 40px;
+    }
+    .i h3 {
+      font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: #6b7280; font-weight: 500;
+    }
+    .i .status {
+      font-size: 11px; color: #3dd68c; display: flex; align-items: center; gap: 6px;
+    }
+    .i .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .i .kcard {
+      background: #16181e;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 20px 18px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .i .kcard::after {
+      content: "";
+      position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent, #6eb0ff), transparent);
+      animation: scanline 2.5s ease-in-out infinite;
+      opacity: 0.6;
+    }
+    @keyframes scanline {
+      0% { transform: translateX(-40%); opacity: 0; }
+      40% { opacity: 0.7; }
+      100% { transform: translateX(40%); opacity: 0; }
+    }
+    .i .kcard .lab {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #6b7280; margin-bottom: 10px;
+    }
+    .i .odometer {
+      display: flex; align-items: flex-end; gap: 2px;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      height: 48px; overflow: hidden;
+    }
+    .i .odometer .digit-col {
+      height: 48px; overflow: hidden; position: relative;
+      width: 0.62em;
+    }
+    .i .odometer .digit-col.wide { width: 0.45em; }
+    .i .odometer .digit-strip {
+      display: flex; flex-direction: column;
+      font-size: 40px; font-weight: 500; letter-spacing: -0.04em;
+      line-height: 48px; height: 48px;
+      animation: rollDigits 4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+    .i .kcard:nth-child(2) .digit-strip { animation-duration: 5.2s; animation-delay: -0.5s; }
+    .i .kcard:nth-child(3) .digit-strip { animation-duration: 6s; animation-delay: -1s; }
+    .i .kcard:nth-child(4) .digit-strip { animation-duration: 4.6s; animation-delay: -0.2s; }
+    .i .kcard:nth-child(5) .digit-strip { animation-duration: 7s; animation-delay: -1.5s; }
+    .i .kcard:nth-child(6) .digit-strip { animation-duration: 5.5s; animation-delay: -0.8s; }
+    @keyframes rollDigits {
+      0% { transform: translateY(0); }
+      20% { transform: translateY(0); }
+      35% { transform: translateY(-48px); }
+      55% { transform: translateY(-48px); }
+      70% { transform: translateY(-96px); }
+      90%, 100% { transform: translateY(-96px); }
+    }
+    .i .odometer .unit {
+      font-size: 16px; color: #6b7280; margin-left: 4px; margin-bottom: 8px;
+    }
+    .i .spark-live {
+      margin-top: 14px; height: 32px;
+    }
+    .i .spark-live canvas { width: 100%; height: 100%; display: block; }
+    .i .kcard.cpu { --accent: #6eb0ff; }
+    .i .kcard.mem { --accent: #ff9a5c; }
+    .i .kcard.bat { --accent: #5dff9a; }
+    .i .kcard.net { --accent: #5ce1ff; }
+    .i .kcard.ai { --accent: #b28dff; }
+    .i .kcard.disk { --accent: #8ab4ff; }
+
+    /* ========== J: PARTICLE FLOW ========== */
+    .j {
+      background: #05060a;
+      color: #e8eaf0;
+    }
+    .j canvas.particles {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    .j .overlay {
+      position: relative; z-index: 2;
+      min-height: 440px;
+      display: grid;
+      grid-template-columns: 160px 1fr 200px;
+      background: linear-gradient(90deg, rgba(5,6,10,0.85) 0%, rgba(5,6,10,0.35) 30%, rgba(5,6,10,0.35) 70%, rgba(5,6,10,0.85) 100%);
+    }
+    .j .left, .j .right {
+      padding: 48px 16px 20px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .j .nav-item {
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 12px; color: rgba(232,234,240,0.4);
+    }
+    .j .nav-item.on {
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+    }
+    .j .center {
+      display: flex; flex-direction: column; justify-content: center;
+      align-items: center; text-align: center; padding: 40px 20px;
+    }
+    .j .hero-val {
+      font-size: 72px; font-weight: 300; letter-spacing: -0.05em;
+      font-variant-numeric: tabular-nums;
+      font-family: "SF Pro Rounded", system-ui, sans-serif;
+      background: linear-gradient(180deg, #fff 20%, rgba(255,255,255,0.45));
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
+      animation: heroGlow 3s ease-in-out infinite;
+    }
+    @keyframes heroGlow {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.15); }
+    }
+    .j .hero-lab {
+      font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(232,234,240,0.45); margin-top: 4px;
+    }
+    .j .hero-sub {
+      margin-top: 20px; display: flex; gap: 20px;
+      font-size: 11px; color: rgba(232,234,240,0.4);
+    }
+    .j .hero-sub b {
+      display: block; font-size: 16px; color: #fff; font-weight: 500;
+      font-variant-numeric: tabular-nums; margin-bottom: 2px;
+    }
+    .j .stat {
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 8px;
+    }
+    .j .stat .lab { font-size: 10px; color: rgba(232,234,240,0.4); letter-spacing: 0.08em; text-transform: uppercase; }
+    .j .stat .val {
+      font-size: 20px; font-weight: 500; margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .j .flow-legend {
+      margin-top: auto; font-size: 10px; color: rgba(232,234,240,0.3);
+      line-height: 1.6;
+    }
+    .j .flow-legend span {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+
+    /* Menu strip */
+    .menu-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .menu-pop {
+      width: 250px; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--line); font-size: 11px;
+      background: #12141a; color: #e8eaf0;
+    }
+    .menu-pop .mh {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px 6px; font-weight: 600; font-size: 11px;
+    }
+    .menu-pop .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    .menu-pop .mr {
+      display: grid; grid-template-columns: 42px 44px 1fr auto;
+      gap: 6px; align-items: center; padding: 6px 12px; font-size: 10.5px;
+    }
+    .menu-pop .spark-mini {
+      height: 14px; position: relative; overflow: hidden;
+    }
+    .menu-pop .spark-mini canvas { width: 100%; height: 100%; }
+    .menu-pop .mf {
+      display: flex; justify-content: space-around;
+      border-top: 1px solid rgba(128,128,128,0.15);
+      padding: 8px; color: #888; font-size: 12px;
+    }
+
+    @media (max-width: 960px) {
+      .option { grid-template-columns: 1fr; }
+      body { padding: 28px 16px 60px; }
+      .j .overlay { grid-template-columns: 1fr; }
+      .f { grid-template-columns: 1fr; }
+      .f .side { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Vitals — animation-forward options</h1>
+    <p>
+      Six animation-heavy directions (exploratory). For practical product motion,
+      prefer <a href="data-driven.html"><strong>data-driven.html</strong></a> —
+      every animation there binds to a real metric, not ambient noise.
+      Layout options: <a href="index.html">index.html</a>.
+    </p>
+    <div class="nav-links">
+      <a href="#e">E · Wavefield</a>
+      <a href="#f">F · Orbital</a>
+      <a href="#g">G · Scope</a>
+      <a href="#h">H · Breathing Cells</a>
+      <a href="#i">I · Kinetic</a>
+      <a href="#j">J · Particle Flow</a>
+      <a href="index.html">A–D static options →</a>
+    </div>
+  </header>
+
+  <div class="options">
+
+    <!-- E WAVEFIELD -->
+    <section class="option" id="e">
+      <div class="meta">
+        <span class="tag">Option E · Canvas ambient</span>
+        <h2>Living Wavefield</h2>
+        <p>
+          The whole window is a multi-layer live waveform field.
+          Metrics float as glass chips on top of the signal — the chart
+          is the product, not a widget inside a card.
+        </p>
+        <ul>
+          <li>CPU / mem / net as stacked animated layers</li>
+          <li>Floating metric chips with soft vertical drift</li>
+          <li>AI usage as a pulsing progress filament</li>
+          <li>Menu bar reuses a single micro-sparkline</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Continuous field draw (60fps) · chip float 5s · bar pulse 2.4s ·
+          load maps to wave amplitude in real app
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · dark field</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window e">
+            <canvas id="wavefield"></canvas>
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="overlay">
+              <div class="title-row">
+                <h3>Vitals</h3>
+                <div class="chips">
+                  <span class="chip on">1H</span>
+                  <span class="chip">6H</span>
+                  <span class="chip">24H</span>
+                </div>
+              </div>
+              <div></div>
+              <div>
+                <div class="float-metrics">
+                  <div class="fm">
+                    <div class="lab">CPU</div>
+                    <div class="val cpu" data-count="37">37%</div>
+                    <div class="sub">Load 2.14</div>
+                  </div>
+                  <div class="fm">
+                    <div class="lab">Memory</div>
+                    <div class="val mem">55%</div>
+                    <div class="sub">17.5 GB used</div>
+                  </div>
+                  <div class="fm">
+                    <div class="lab">Network</div>
+                    <div class="val net">1.2M</div>
+                    <div class="sub">↑ 240K</div>
+                  </div>
+                  <div class="fm">
+                    <div class="lab">Battery</div>
+                    <div class="val bat">78%</div>
+                    <div class="sub">2h 34m</div>
+                  </div>
+                </div>
+                <div class="footer-bar">
+                  <span>AI today <b>474K</b> tokens</span>
+                  <span class="bar-track"><i></i></span>
+                  <span>Cursor <b>23%</b> · 11 sessions</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="menu-row">
+          <div class="menu-pop">
+            <div class="mh"><span>System</span><span class="dot"></span></div>
+            <div class="mr"><span>CPU</span><span style="color:#6eb0ff;font-weight:600">37%</span><div class="spark-mini"><canvas class="mini-spark" data-color="#6eb0ff"></canvas></div><span style="color:#6b7280">2.14</span></div>
+            <div class="mr"><span>Mem</span><span style="color:#ff9a5c;font-weight:600">55%</span><div class="spark-mini"><canvas class="mini-spark" data-color="#ff9a5c"></canvas></div><span style="color:#6b7280">17.5G</span></div>
+            <div class="mr"><span>Bat</span><span style="color:#5dff9a;font-weight:600">78%</span><div class="spark-mini"><canvas class="mini-spark" data-color="#5dff9a"></canvas></div><span style="color:#6b7280">2h34m</span></div>
+            <div class="mf"><span>◎</span><span>❚❚</span><span>⚙</span><span>⏻</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- F ORBITAL -->
+    <section class="option" id="f">
+      <div class="meta">
+        <span class="tag">Option F · Radial motion</span>
+        <h2>Orbital Rings</h2>
+        <p>
+          Concentric rings orbit at different speeds — each ring is a metric.
+          Arc length encodes utilization; spin rate encodes activity.
+          Center shows the “primary” vital (CPU or user-pinned).
+        </p>
+        <ul>
+          <li>4 rings: CPU, Memory, Network, Battery</li>
+          <li>Breathing core with soft glow</li>
+          <li>Side rail for AI + processes (static data)</li>
+          <li>Great for a square or tall window</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Independent ring rotation · core breathe 3.2s · status dots pulse ·
+          in SwiftUI: TimelineView + animatable arc trim
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · orbital</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window f">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="orbit-stage">
+              <div class="orbit-wrap">
+                <div class="ring r1">
+                  <svg viewBox="0 0 300 300">
+                    <circle cx="150" cy="150" r="142" fill="none" stroke="rgba(110,176,255,0.12)" stroke-width="2"/>
+                    <circle cx="150" cy="150" r="142" fill="none" stroke="#6eb0ff" stroke-width="3"
+                      stroke-dasharray="330 560" stroke-linecap="round" transform="rotate(-90 150 150)"/>
+                    <circle cx="150" cy="8" r="4" fill="#6eb0ff"/>
+                  </svg>
+                </div>
+                <div class="ring r2">
+                  <svg viewBox="0 0 244 244">
+                    <circle cx="122" cy="122" r="114" fill="none" stroke="rgba(255,154,92,0.12)" stroke-width="2"/>
+                    <circle cx="122" cy="122" r="114" fill="none" stroke="#ff9a5c" stroke-width="3"
+                      stroke-dasharray="390 716" stroke-linecap="round" transform="rotate(-90 122 122)"/>
+                    <circle cx="122" cy="8" r="4" fill="#ff9a5c"/>
+                  </svg>
+                </div>
+                <div class="ring r3">
+                  <svg viewBox="0 0 188 188">
+                    <circle cx="94" cy="94" r="86" fill="none" stroke="rgba(92,225,255,0.12)" stroke-width="2"/>
+                    <circle cx="94" cy="94" r="86" fill="none" stroke="#5ce1ff" stroke-width="3"
+                      stroke-dasharray="200 540" stroke-linecap="round" transform="rotate(-90 94 94)"/>
+                    <circle cx="94" cy="8" r="3.5" fill="#5ce1ff"/>
+                  </svg>
+                </div>
+                <div class="ring r4">
+                  <svg viewBox="0 0 124 124">
+                    <circle cx="62" cy="62" r="54" fill="none" stroke="rgba(93,255,154,0.12)" stroke-width="2"/>
+                    <circle cx="62" cy="62" r="54" fill="none" stroke="#5dff9a" stroke-width="3"
+                      stroke-dasharray="265 340" stroke-linecap="round" transform="rotate(-90 62 62)"/>
+                    <circle cx="62" cy="8" r="3" fill="#5dff9a"/>
+                  </svg>
+                </div>
+                <div class="core">
+                  <div class="core-inner">
+                    <div class="pct">37%</div>
+                    <div class="lbl">CPU</div>
+                  </div>
+                </div>
+                <div class="orbit-label" style="top:-4px;left:50%;transform:translateX(-50%)">CPU</div>
+                <div class="orbit-label" style="bottom:8px;right:0">Mem</div>
+                <div class="orbit-label" style="left:0;top:50%">Net</div>
+                <div class="orbit-label" style="right:12px;top:38%">Bat</div>
+              </div>
+            </div>
+            <aside class="side">
+              <h3>Live</h3>
+              <div class="srow">
+                <span class="n"><span class="pulse-dot" style="background:#6eb0ff"></span>CPU</span>
+                <span class="v" style="color:#6eb0ff">37%</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="pulse-dot" style="background:#ff9a5c;animation-delay:-0.4s"></span>Memory</span>
+                <span class="v" style="color:#ff9a5c">55%</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="pulse-dot" style="background:#5ce1ff;animation-delay:-0.8s"></span>Network</span>
+                <span class="v" style="color:#5ce1ff">1.2M</span>
+              </div>
+              <div class="srow">
+                <span class="n"><span class="pulse-dot" style="background:#5dff9a;animation-delay:-1.2s"></span>Battery</span>
+                <span class="v" style="color:#5dff9a">78%</span>
+              </div>
+              <h3 style="margin-top:12px">AI today</h3>
+              <div class="srow"><span class="n">Codex</span><span class="v">302.7K</span></div>
+              <div class="srow"><span class="n">Claude</span><span class="v">171.5K</span></div>
+              <div class="srow"><span class="n">Sessions</span><span class="v">11</span></div>
+              <h3 style="margin-top:12px">Top</h3>
+              <div class="srow"><span class="n">Cursor</span><span class="v">23%</span></div>
+              <div class="srow"><span class="n">Chrome</span><span class="v">13%</span></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- G SCOPE -->
+    <section class="option" id="g">
+      <div class="meta">
+        <span class="tag">Option G · Instrument / CRT</span>
+        <h2>Signal Scope</h2>
+        <p>
+          Oscilloscope metaphor: phosphor grid, sweeping beam, multi-channel
+          traces with glow decay. Extremely expressive with animation —
+          every sample is a living draw, not a static polyline.
+        </p>
+        <ul>
+          <li>Sweeping beam reveals “fresh” data edge</li>
+          <li>Channel strips tick as values update</li>
+          <li>Monospace + green phosphor (or amber mode)</li>
+          <li>Optional phosphor trail persistence</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Beam sweep 2.8s · live multi-trace canvas · value tick flash ·
+          SwiftUI: Canvas + TimelineView, or Metal for true phosphor
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · scope</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window g">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="scope-body">
+              <div class="scope-head">
+                <h3>Vitals // Scope</h3>
+                <div class="readouts">
+                  <span>RATE <b>1s</b></span>
+                  <span>CH <b>4</b></span>
+                  <span>MODE <b>ROLL</b></span>
+                </div>
+              </div>
+              <div class="scope-screen">
+                <canvas id="scope"></canvas>
+                <div class="beam"></div>
+                <div class="scope-glow"></div>
+              </div>
+              <div class="channels">
+                <div class="ch"><div class="lab">CH1 CPU</div><div class="val">37.2%</div></div>
+                <div class="ch"><div class="lab">CH2 MEM</div><div class="val">55.0%</div></div>
+                <div class="ch"><div class="lab">CH3 NET</div><div class="val">1.24M</div></div>
+                <div class="ch"><div class="lab">CH4 BAT</div><div class="val">78.0%</div></div>
+                <div class="ch"><div class="lab">AI TOK</div><div class="val">474K</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- H BREATHING CELLS -->
+    <section class="option" id="h">
+      <div class="meta">
+        <span class="tag">Option H · Soft organic</span>
+        <h2>Breathing Cells</h2>
+        <p>
+          Light, friendly, and alive. Bento cells with soft color blobs that
+          morph and drift — utilization is felt as visual energy, not just a number.
+          Live sparkline sits inside the large CPU cell.
+        </p>
+        <ul>
+          <li>Bento grid (1 large + 4 small)</li>
+          <li>Gaussian blobs scale with activity</li>
+          <li>Light-first; dark = ink + muted glow</li>
+          <li>Warm paper surface, rounded 18px</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Blob morph 5–8s · live wave in hero cell · spring on range change ·
+          SwiftUI: matchedGeometry + blur circles + TimelineView sparkline
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · light organic</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window h">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="inner">
+              <div class="head">
+                <h3>Overview</h3>
+                <div class="range">
+                  <span class="on">1H</span><span>6H</span><span>24H</span><span>7D</span>
+                </div>
+              </div>
+              <div class="cells">
+                <div class="cell big cpu">
+                  <div class="blob"></div>
+                  <div class="lab">CPU</div>
+                  <div class="val">37%</div>
+                  <div class="detail">Load average 2.14 · 10 cores</div>
+                  <div class="wave"><canvas id="breathe-wave"></canvas></div>
+                </div>
+                <div class="cell mem">
+                  <div class="blob"></div>
+                  <div class="lab">Memory</div>
+                  <div class="val" style="color:#ea580c">55%</div>
+                  <div class="detail">17.5 GB used</div>
+                </div>
+                <div class="cell net">
+                  <div class="blob"></div>
+                  <div class="lab">Network</div>
+                  <div class="val" style="color:#0d9488">1.2M</div>
+                  <div class="detail">↑ 240K</div>
+                </div>
+                <div class="cell bat">
+                  <div class="blob"></div>
+                  <div class="lab">Battery</div>
+                  <div class="val" style="color:#16a34a">78%</div>
+                  <div class="detail">2h 34m left</div>
+                </div>
+                <div class="cell ai">
+                  <div class="blob"></div>
+                  <div class="lab">AI today</div>
+                  <div class="val" style="color:#7c3aed;font-size:28px">474K</div>
+                  <div class="detail">11 sessions</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- I KINETIC -->
+    <section class="option" id="i">
+      <div class="meta">
+        <span class="tag">Option I · Number as motion</span>
+        <h2>Kinetic Counters</h2>
+        <p>
+          The numbers themselves animate — odometer-style digit rolls on every
+          sample, with live drawing sparklines and a scanning accent line.
+          Minimal layout; motion is the hierarchy.
+        </p>
+        <ul>
+          <li>6 equal cards, monochrome chrome</li>
+          <li>Digit strips roll with spring easing</li>
+          <li>Per-card live sparkline (color-coded)</li>
+          <li>Scan-line accent on update</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Digit roll cubic-bezier · sparkline scroll · scanline on tick ·
+          SwiftUI: contentTransition(.numericText) + phaseAnimator
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · kinetic grid</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window i">
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="inner">
+              <div class="head">
+                <h3>Vitals</h3>
+                <div class="status"><span class="live-pill">Live · 1s</span></div>
+              </div>
+              <div class="grid">
+                <div class="kcard cpu">
+                  <div class="lab">CPU</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#6eb0ff"><span>3</span><span>3</span><span>4</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#6eb0ff"><span>7</span><span>8</span><span>2</span></div></div>
+                    <span class="unit">%</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#6eb0ff"></canvas></div>
+                </div>
+                <div class="kcard mem">
+                  <div class="lab">Memory</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#ff9a5c"><span>5</span><span>5</span><span>5</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#ff9a5c"><span>5</span><span>6</span><span>4</span></div></div>
+                    <span class="unit">%</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#ff9a5c"></canvas></div>
+                </div>
+                <div class="kcard bat">
+                  <div class="lab">Battery</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#5dff9a"><span>7</span><span>7</span><span>7</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#5dff9a"><span>8</span><span>8</span><span>7</span></div></div>
+                    <span class="unit">%</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#5dff9a"></canvas></div>
+                </div>
+                <div class="kcard net">
+                  <div class="lab">Download</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#5ce1ff"><span>1</span><span>1</span><span>2</span></div></div>
+                    <div class="digit-col wide"><div class="digit-strip" style="color:#5ce1ff"><span>.</span><span>.</span><span>.</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#5ce1ff"><span>2</span><span>4</span><span>0</span></div></div>
+                    <span class="unit">M</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#5ce1ff"></canvas></div>
+                </div>
+                <div class="kcard disk">
+                  <div class="lab">Disk</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#8ab4ff"><span>4</span><span>4</span><span>4</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#8ab4ff"><span>2</span><span>2</span><span>3</span></div></div>
+                    <span class="unit">%</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#8ab4ff"></canvas></div>
+                </div>
+                <div class="kcard ai">
+                  <div class="lab">AI tokens</div>
+                  <div class="odometer">
+                    <div class="digit-col"><div class="digit-strip" style="color:#b28dff"><span>4</span><span>4</span><span>4</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#b28dff"><span>7</span><span>7</span><span>8</span></div></div>
+                    <div class="digit-col"><div class="digit-strip" style="color:#b28dff"><span>4</span><span>5</span><span>0</span></div></div>
+                    <span class="unit">K</span>
+                  </div>
+                  <div class="spark-live"><canvas class="live-spark" data-color="#b28dff"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- J PARTICLE FLOW -->
+    <section class="option" id="j">
+      <div class="meta">
+        <span class="tag">Option J · superseded by data-driven</span>
+        <h2>Particle Flow</h2>
+        <p>
+          Decorative preview only. For the real binding (density = CPU, speed = net,
+          heat = memory, dim = low battery), use
+          <a href="data-driven.html#particles"><strong>data-driven.html#particles</strong></a>
+          and drag the shared usage controls.
+        </p>
+        <ul>
+          <li>Full-bleed particle canvas</li>
+          <li>Center hero = pinned metric (CPU)</li>
+          <li>Side rails for nav + secondary stats</li>
+          <li>Menu bar could show a micro particle orb</li>
+        </ul>
+        <div class="motion">
+          <strong>Motion language</strong>
+          Continuous particle sim · hero glow breathe · side stats static ·
+          SwiftUI: Metal/SpriteKit preferred; Canvas ok for ~200 particles
+        </div>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>Main window · particle field</span>
+            <span class="live-pill">Animated</span>
+          </div>
+          <div class="window j">
+            <canvas class="particles" id="particles"></canvas>
+            <div class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+            <div class="overlay">
+              <div class="left">
+                <div class="nav-item on">Overview</div>
+                <div class="nav-item">System</div>
+                <div class="nav-item">AI Usage</div>
+                <div class="nav-item">Processes</div>
+                <div class="nav-item">Network</div>
+                <div class="nav-item">Storage</div>
+                <div class="flow-legend" style="margin-top:auto;padding:12px">
+                  <div><span style="background:#6eb0ff"></span>CPU density</div>
+                  <div><span style="background:#5ce1ff"></span>Network flow</div>
+                  <div><span style="background:#ff9a5c"></span>Memory heat</div>
+                </div>
+              </div>
+              <div class="center">
+                <div class="hero-val">37%</div>
+                <div class="hero-lab">System load</div>
+                <div class="hero-sub">
+                  <div><b>55%</b>Memory</div>
+                  <div><b>1.2M</b>Down</div>
+                  <div><b>78%</b>Battery</div>
+                </div>
+              </div>
+              <div class="right">
+                <div class="stat">
+                  <div class="lab">AI today</div>
+                  <div class="val" style="color:#b28dff">474K</div>
+                </div>
+                <div class="stat">
+                  <div class="lab">Top process</div>
+                  <div class="val" style="font-size:16px">Cursor</div>
+                </div>
+                <div class="stat">
+                  <div class="lab">Thermal</div>
+                  <div class="val" style="font-size:16px;color:#5dff9a">Nominal</div>
+                </div>
+                <div class="stat">
+                  <div class="lab">Sessions</div>
+                  <div class="val">11</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer style="max-width:1320px;margin:56px auto 0;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.7">
+    <div><strong style="color:#c8cdd8">SwiftUI mapping (all of these are implementable natively)</strong></div>
+    E Wavefield → <code>TimelineView</code> + <code>Canvas</code> multipath ·
+    F Orbital → rotating <code>AngularGradient</code> / trimmed <code>Circle</code> ·
+    G Scope → <code>Canvas</code> phosphor trail + beam overlay ·
+    H Breathing → blurred <code>Circle</code> + spring ·
+    I Kinetic → <code>contentTransition(.numericText)</code> + <code>phaseAnimator</code> ·
+    J Particles → <code>Canvas</code> or lightweight Metal
+    <br/>
+    Static options A–D: <a href="index.html">index.html</a>
+    · Open this file: <code style="color:#c8cdd8">macos/vitals/design-options/animated.html</code>
+  </footer>
+
+  <script>
+    // ---------- helpers ----------
+    function resizeCanvas(canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rect.width * dpr));
+      const h = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h, dpr, cssW: rect.width, cssH: rect.height };
+    }
+
+    function noise1(t, seed) {
+      return Math.sin(t * 1.7 + seed) * 0.35
+        + Math.sin(t * 3.1 + seed * 1.3) * 0.25
+        + Math.sin(t * 0.6 + seed * 2.1) * 0.4;
+    }
+
+    // ---------- E: Wavefield ----------
+    (function () {
+      const canvas = document.getElementById('wavefield');
+      if (!canvas) return;
+      const layers = [
+        { color: 'rgba(110,176,255,0.55)', amp: 0.22, speed: 1.0, y: 0.55, seed: 1 },
+        { color: 'rgba(255,154,92,0.45)', amp: 0.16, speed: 0.75, y: 0.48, seed: 2.4 },
+        { color: 'rgba(92,225,255,0.35)', amp: 0.12, speed: 1.35, y: 0.62, seed: 3.7 },
+        { color: 'rgba(178,141,255,0.25)', amp: 0.10, speed: 0.55, y: 0.40, seed: 5.1 },
+      ];
+      let t0 = performance.now();
+      function frame(now) {
+        const { w, h, dpr } = resizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        // soft bg glow
+        const g = ctx.createRadialGradient(w * 0.5, h * 0.55, 0, w * 0.5, h * 0.55, w * 0.55);
+        g.addColorStop(0, 'rgba(30,50,90,0.35)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+
+        const t = (now - t0) / 1000;
+        layers.forEach((layer) => {
+          ctx.beginPath();
+          const mid = h * layer.y;
+          const amp = h * layer.amp;
+          for (let x = 0; x <= w; x += 4 * dpr) {
+            const nx = x / w;
+            const y = mid
+              + noise1(nx * 8 + t * layer.speed, layer.seed) * amp
+              + Math.sin(nx * 14 + t * layer.speed * 1.4) * amp * 0.35;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.strokeStyle = layer.color;
+          ctx.lineWidth = 2 * dpr;
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+          // fill under
+          ctx.lineTo(w, h);
+          ctx.lineTo(0, h);
+          ctx.closePath();
+          const grad = ctx.createLinearGradient(0, mid - amp, 0, h);
+          grad.addColorStop(0, layer.color.replace(/[\d.]+\)$/, '0.12)'));
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = grad;
+          ctx.fill();
+        });
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+
+    // ---------- G: Scope ----------
+    (function () {
+      const canvas = document.getElementById('scope');
+      if (!canvas) return;
+      const channels = [
+        { color: 'rgba(158,236,192,0.9)', base: 0.35, amp: 0.18, freq: 1.2, seed: 1 },
+        { color: 'rgba(255,192,122,0.75)', base: 0.55, amp: 0.08, freq: 0.5, seed: 2 },
+        { color: 'rgba(122,212,255,0.7)', base: 0.72, amp: 0.14, freq: 2.1, seed: 3 },
+        { color: 'rgba(212,160,255,0.55)', base: 0.22, amp: 0.06, freq: 0.35, seed: 4 },
+      ];
+      const history = channels.map(() => []);
+      const maxPts = 240;
+      let last = 0;
+      function frame(now) {
+        const { w, h, dpr } = resizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        if (now - last > 30) {
+          last = now;
+          const t = now / 1000;
+          channels.forEach((ch, i) => {
+            const v = ch.base
+              + noise1(t * ch.freq, ch.seed) * ch.amp
+              + Math.sin(t * ch.freq * 2.3) * ch.amp * 0.3;
+            history[i].push(Math.min(0.95, Math.max(0.05, v)));
+            if (history[i].length > maxPts) history[i].shift();
+          });
+        }
+        // phosphor fade
+        ctx.fillStyle = 'rgba(6,16,8,0.18)';
+        ctx.fillRect(0, 0, w, h);
+
+        history.forEach((pts, i) => {
+          if (pts.length < 2) return;
+          ctx.beginPath();
+          pts.forEach((v, idx) => {
+            const x = (idx / (maxPts - 1)) * w;
+            const y = v * h;
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = channels[i].color;
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.shadowColor = channels[i].color;
+          ctx.shadowBlur = 8 * dpr;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        });
+        requestAnimationFrame(frame);
+      }
+      // seed dark
+      const ctx0 = canvas.getContext('2d');
+      resizeCanvas(canvas);
+      ctx0.fillStyle = '#061008';
+      ctx0.fillRect(0, 0, canvas.width, canvas.height);
+      requestAnimationFrame(frame);
+    })();
+
+    // ---------- H: breathe wave ----------
+    (function () {
+      const canvas = document.getElementById('breathe-wave');
+      if (!canvas) return;
+      const pts = Array.from({ length: 80 }, () => 0.5);
+      let last = 0;
+      function frame(now) {
+        const { w, h, dpr } = resizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        if (now - last > 40) {
+          last = now;
+          const t = now / 1000;
+          pts.push(0.5 + noise1(t * 1.4, 9) * 0.3);
+          pts.shift();
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.beginPath();
+        pts.forEach((v, i) => {
+          const x = (i / (pts.length - 1)) * w;
+          const y = v * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = 'rgba(37,99,235,0.7)';
+        ctx.lineWidth = 2 * dpr;
+        ctx.stroke();
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, 'rgba(37,99,235,0.2)');
+        g.addColorStop(1, 'rgba(37,99,235,0)');
+        ctx.fillStyle = g;
+        ctx.fill();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+
+    // ---------- I + menu mini sparklines ----------
+    function runSpark(canvas, color, speed) {
+      const pts = Array.from({ length: 40 }, () => 0.5);
+      let last = 0;
+      const seed = Math.random() * 10;
+      function frame(now) {
+        const { w, h, dpr } = resizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        if (now - last > 50) {
+          last = now;
+          const t = now / 1000;
+          pts.push(0.5 + noise1(t * speed, seed) * 0.35);
+          pts.shift();
+        }
+        ctx.clearRect(0, 0, w, h);
+        ctx.beginPath();
+        pts.forEach((v, i) => {
+          const x = (i / (pts.length - 1)) * w;
+          const y = (1 - v) * h * 0.85 + h * 0.08;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+    document.querySelectorAll('.live-spark').forEach((c, i) => {
+      runSpark(c, c.dataset.color || '#6eb0ff', 0.8 + i * 0.15);
+    });
+    document.querySelectorAll('.mini-spark').forEach((c, i) => {
+      runSpark(c, c.dataset.color || '#6eb0ff', 1 + i * 0.2);
+    });
+
+    // ---------- J: Particles ----------
+    (function () {
+      const canvas = document.getElementById('particles');
+      if (!canvas) return;
+      const N = 160;
+      const particles = Array.from({ length: N }, () => ({
+        x: Math.random(),
+        y: Math.random(),
+        vx: (Math.random() - 0.5) * 0.0015,
+        vy: (Math.random() - 0.5) * 0.0015,
+        r: 0.5 + Math.random() * 2,
+        kind: Math.random(),
+      }));
+      function frame(now) {
+        const { w, h, dpr } = resizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'rgba(5,6,10,0.22)';
+        ctx.fillRect(0, 0, w, h);
+
+        const t = now / 1000;
+        const cpu = 0.37 + noise1(t * 0.3, 1) * 0.05;
+        particles.forEach((p) => {
+          // flow field
+          const angle = noise1(p.x * 3 + t * 0.2, p.y * 3) * Math.PI * 2;
+          const speed = 0.0008 + cpu * 0.0025;
+          p.vx += Math.cos(angle) * speed * 0.15;
+          p.vy += Math.sin(angle) * speed * 0.15;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          p.x += p.vx * (h / w);
+          p.y += p.vy;
+          if (p.x < 0) p.x += 1;
+          if (p.x > 1) p.x -= 1;
+          if (p.y < 0) p.y += 1;
+          if (p.y > 1) p.y -= 1;
+
+          let color;
+          if (p.kind < 0.45) color = 'rgba(110,176,255,';
+          else if (p.kind < 0.75) color = 'rgba(92,225,255,';
+          else color = 'rgba(255,154,92,';
+          const alpha = 0.25 + p.r * 0.2;
+          ctx.beginPath();
+          ctx.arc(p.x * w, p.y * h, p.r * dpr * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = color + alpha + ')';
+          ctx.fill();
+        });
+        // soft center glow
+        const g = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.25);
+        g.addColorStop(0, 'rgba(110,176,255,0.08)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
