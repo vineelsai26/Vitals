@@ -32,6 +32,12 @@ make app
 open dist/Vitals.app
 ```
 
+The UI lives in a `VitalsUI` library target (with a small public
+`VitalsRuntime` + view-wrapper surface); `VitalsApp` is a thin `@main` wrapper
+over it. This lets Vitals also run embedded in-process inside PowerTools
+without duplicating its view graph. `VitalsCore` remains the data/sampling
+layer.
+
 ## Verify
 
 ```sh

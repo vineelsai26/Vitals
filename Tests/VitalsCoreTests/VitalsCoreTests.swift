@@ -125,6 +125,58 @@ final class VitalsCoreTests: XCTestCase {
         XCTAssertEqual(appended.codex.totalTokens, 195, "only the cumulative delta should be added")
     }
 
+    func testProcessCPUPercentResetsWhenPIDIsReused() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        // Prior baseline: an old process with large cumulative counters.
+        let previous = ProcessCPUSample(
+            user: 500_000_000_000,
+            system: 200_000_000_000,
+            start: 1_000,
+            at: start
+        )
+        // A new process reused the PID: different start time, tiny counters.
+        let reused = ProcessCPUSample(
+            user: 1_000_000,
+            system: 0,
+            start: 2_000,
+            at: start.addingTimeInterval(3)
+        )
+
+        let reusedPercent = SystemMetricsCollector.processCPUPercent(
+            previous: previous,
+            current: reused,
+            processorCount: 8
+        )
+        XCTAssertEqual(reusedPercent, 0, "A reused PID must restart from a zero baseline, not spike.")
+    }
+
+    func testProcessCPUPercentComputesSteadyStateForSameIdentity() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let previous = ProcessCPUSample(user: 1_000_000_000, system: 0, start: 1_000, at: start)
+        // 2 seconds of wall time, 1 second of CPU consumed -> 50% of one core.
+        let current = ProcessCPUSample(
+            user: 2_000_000_000,
+            system: 0,
+            start: 1_000,
+            at: start.addingTimeInterval(2)
+        )
+
+        let percent = SystemMetricsCollector.processCPUPercent(
+            previous: previous,
+            current: current,
+            processorCount: 8
+        )
+        XCTAssertEqual(percent, 50, accuracy: 0.0001)
+    }
+
+    func testProcessCPUPercentIsZeroWithoutPriorBaseline() {
+        let sample = ProcessCPUSample(user: 5, system: 5, start: 1_000, at: Date())
+        XCTAssertEqual(
+            SystemMetricsCollector.processCPUPercent(previous: nil, current: sample, processorCount: 8),
+            0
+        )
+    }
+
     private func codexRecord(input: Int, cached: Int, output: Int, total: Int, minute: Int) -> String {
         #"{"timestamp":"2026-07-10T10:0\#(minute):00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(input),"cached_input_tokens":\#(cached),"output_tokens":\#(output),"total_tokens":\#(total)}}}}"#
     }

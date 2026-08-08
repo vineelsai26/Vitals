@@ -14,11 +14,22 @@ public actor SystemMetricsSampler {
     }
 }
 
+struct ProcessCPUSample: Equatable {
+    var user: UInt64
+    var system: UInt64
+    var start: UInt64
+    var at: Date
+}
+
 struct SystemMetricsCollector {
+    // mach_host_self() adds a user reference to the host-self send right on every
+    // call; capture it once and reuse it so long-running sampling does not leak
+    // host-port references into the task's IPC name space.
+    private let hostPort: mach_port_t = mach_host_self()
     private var previousCPU: CPUTicks?
     private var previousNetworkByInterface: [String: NetworkCounters] = [:]
     private var previousNetworkDate: Date?
-    private var processCPUBaseline: [Int32: (user: UInt64, system: UInt64, at: Date)] = [:]
+    private var processCPUBaseline: [Int32: ProcessCPUSample] = [:]
     private let processorName = Self.sysctlString("machdep.cpu.brand_string") ?? "Apple processor"
     private let isAppleSilicon = Self.sysctlInt("hw.optional.arm64") == 1
     private let gpuName = MTLCreateSystemDefaultDevice()?.name
@@ -26,7 +37,7 @@ struct SystemMetricsCollector {
     private var cachedProcesses: [ProcessMetric] = []
 
     mutating func sample(at now: Date = Date()) -> SystemSnapshot {
-        let currentCPU = Self.cpuTicks()
+        let currentCPU = Self.cpuTicks(host: hostPort)
         let cpuUsage: Double
         if let previousCPU, let currentCPU {
             cpuUsage = CPUTicks.utilization(previous: previousCPU, current: currentCPU)
@@ -69,7 +80,7 @@ struct SystemMetricsCollector {
         previousNetworkByInterface = interfaceCounters
         previousNetworkDate = now
 
-        let memory = Self.memoryBreakdown()
+        let memory = Self.memoryBreakdown(host: hostPort)
         let disk = Self.diskUsage()
         let battery = Self.batteryStatus()
         if now.timeIntervalSince(lastProcessRefresh) >= 3 {
@@ -122,12 +133,12 @@ struct SystemMetricsCollector {
         }
     }
 
-    private static func cpuTicks() -> CPUTicks? {
+    private static func cpuTicks(host: mach_port_t) -> CPUTicks? {
         var cpuInfo: processor_info_array_t?
         var cpuInfoCount: mach_msg_type_number_t = 0
         var cpuCount: natural_t = 0
         let result = host_processor_info(
-            mach_host_self(),
+            host,
             PROCESSOR_CPU_LOAD_INFO,
             &cpuCount,
             &cpuInfo,
@@ -154,7 +165,7 @@ struct SystemMetricsCollector {
         return resultTicks
     }
 
-    private static func memoryBreakdown() -> MemoryBreakdown {
+    private static func memoryBreakdown(host: mach_port_t) -> MemoryBreakdown {
         let total = ProcessInfo.processInfo.physicalMemory
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(
@@ -162,7 +173,7 @@ struct SystemMetricsCollector {
         )
         let result = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(host, HOST_VM_INFO64, $0, &count)
             }
         }
         let swap = swapUsage()
@@ -321,19 +332,21 @@ struct SystemMetricsCollector {
             let user = UInt64(taskInfo.pti_total_user)
             let system = UInt64(taskInfo.pti_total_system)
             // pti_total_user/system are in nanoseconds.
-            let cpuUsage: Double
-            if let previous = processCPUBaseline[pid] {
-                let elapsed = now.timeIntervalSince(previous.at)
-                let deltaNanos = Double((user &- previous.user) &+ (system &- previous.system))
-                let cpuSeconds = deltaNanos / 1_000_000_000
-                let maxPercent = 100 * Double(ProcessInfo.processInfo.processorCount)
-                cpuUsage = elapsed > 0
-                    ? min(max((cpuSeconds / elapsed) * 100, 0), maxPercent)
-                    : 0
-            } else {
-                cpuUsage = 0
-            }
-            processCPUBaseline[pid] = (user, system, now)
+            let current = ProcessCPUSample(
+                user: user,
+                system: system,
+                start: Self.processStartSeconds(pid),
+                at: now
+            )
+            // Only trust the baseline when it belongs to the same process instance;
+            // a reused PID has a different start time and must restart from 0 rather
+            // than subtracting a fresh process's small counters from a large one.
+            let cpuUsage = Self.processCPUPercent(
+                previous: processCPUBaseline[pid],
+                current: current,
+                processorCount: ProcessInfo.processInfo.processorCount
+            )
+            processCPUBaseline[pid] = current
             metrics.append(
                 ProcessMetric(
                     pid: pid,
@@ -355,13 +368,47 @@ struct SystemMetricsCollector {
             .map { $0 }
     }
 
+    /// Per-process CPU percentage since the previous baseline, keyed on process
+    /// identity. Returns 0 when there is no prior sample or when the PID has been
+    /// reused (the recorded start time differs), avoiding the wrapping-subtraction
+    /// spike that reused PIDs would otherwise produce.
+    static func processCPUPercent(
+        previous: ProcessCPUSample?,
+        current: ProcessCPUSample,
+        processorCount: Int
+    ) -> Double {
+        guard let previous, previous.start == current.start else { return 0 }
+        let elapsed = current.at.timeIntervalSince(previous.at)
+        guard elapsed > 0 else { return 0 }
+        // Same identity: cumulative counters are monotonic. Guard against any
+        // decrease so a transient read can never wrap into a huge delta.
+        guard current.user >= previous.user, current.system >= previous.system else { return 0 }
+        let deltaNanos = Double((current.user - previous.user) + (current.system - previous.system))
+        let cpuSeconds = deltaNanos / 1_000_000_000
+        let maxPercent = 100 * Double(processorCount)
+        return min(max((cpuSeconds / elapsed) * 100, 0), maxPercent)
+    }
+
+    /// Process start time in seconds since the epoch, used as a per-PID identity
+    /// token so a recycled PID is not mistaken for the process it replaced.
+    private static func processStartSeconds(_ pid: pid_t) -> UInt64 {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.stride)
+        let result = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size)
+        guard result == size else { return 0 }
+        return UInt64(info.pbi_start_tvsec)
+    }
+
     private func fallbackProcessesViaPS(limit: Int) -> [ProcessMetric] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         process.arguments = ["-axo", "pid=,pcpu=,rss=,comm="]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        // Discard stderr to a sink rather than an unread Pipe: only stdout is
+        // consumed, so an unread stderr Pipe could fill its ~64KB buffer and
+        // deadlock ps against our blocking read of stdout.
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()

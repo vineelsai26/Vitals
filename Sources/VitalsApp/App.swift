@@ -1,15 +1,14 @@
 import AppKit
 import SwiftUI
-import VitalsCore
+import VitalsUI
 
 final class VitalsAppDelegate: NSObject, NSApplicationDelegate {
     var reopenMainWindow: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let settings = AppSettings.shared
-        settings.applyActivationPolicy()
+        VitalsAppSupport.applyActivationPolicy()
         DispatchQueue.main.async {
-            if settings.startInMenuBar {
+            if VitalsAppSupport.startInMenuBar {
                 NSApplication.shared.windows.filter { $0.canBecomeMain }.forEach { $0.close() }
             } else {
                 NSApplication.shared.activate(ignoringOtherApps: true)
@@ -18,7 +17,7 @@ final class VitalsAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        !AppSettings.shared.keepRunningWithoutWindows
+        !VitalsAppSupport.keepRunningWithoutWindows
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -35,26 +34,18 @@ final class VitalsAppDelegate: NSObject, NSApplicationDelegate {
 struct VitalsApplication: App {
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(VitalsAppDelegate.self) private var appDelegate
-    @StateObject private var settings = AppSettings.shared
-    @StateObject private var controller = MonitorController()
-    @State private var selection: DashboardSection = .overview
+    @StateObject private var runtime = VitalsRuntime()
 
     var body: some Scene {
         Window("Vitals", id: "main") {
-            MainAppLayout(
-                selection: $selection,
-                scrollsContent: true,
-                showsPreviewTrafficLights: false
-            )
-            .environmentObject(controller)
-            .environmentObject(settings)
-            .preferredColorScheme(settings.appearance.colorScheme)
-            .frame(minWidth: 900, minHeight: 480)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear {
-                appDelegate.reopenMainWindow = { openWindow(id: "main") }
-                controller.start()
-            }
+            VitalsMainView(runtime: runtime)
+                .preferredColorScheme(runtime.colorScheme)
+                .frame(minWidth: 900, minHeight: 480)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear {
+                    appDelegate.reopenMainWindow = { openWindow(id: "main") }
+                    runtime.start()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
@@ -64,46 +55,36 @@ struct VitalsApplication: App {
             CommandMenu("Navigate") {
                 ForEach(DashboardSection.allCases) { section in
                     Button(section.rawValue) {
-                        selection = section
+                        runtime.selection = section
                         openMainWindow()
                     }
                     .keyboardShortcut(section.shortcutKey ?? "0", modifiers: [.command])
                 }
             }
             CommandGroup(after: .toolbar) {
-                Button(controller.isRunning ? "Pause Monitoring" : "Resume Monitoring") {
-                    controller.toggleRunning()
+                Button(runtime.isRunning ? "Pause Monitoring" : "Resume Monitoring") {
+                    runtime.toggleRunning()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 Button("Refresh Now") {
-                    controller.refreshNow()
+                    runtime.refreshNow()
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }
         }
 
         MenuBarExtra {
-            MenuBarView()
-                .environmentObject(controller)
-                .environmentObject(settings)
-                .preferredColorScheme(settings.appearance.colorScheme)
-                .onAppear { controller.start() }
+            VitalsMenuBarContent(runtime: runtime)
+                .preferredColorScheme(runtime.colorScheme)
+                .onAppear { runtime.start() }
         } label: {
-            Label {
-                MenuBarLabelText()
-                    .environmentObject(controller)
-                    .environmentObject(settings)
-            } icon: {
-                Image(systemName: "waveform.path.ecg")
-            }
+            VitalsMenuBarLabel(runtime: runtime)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
-                .environmentObject(settings)
-                .environmentObject(controller)
-                .preferredColorScheme(settings.appearance.colorScheme)
+            VitalsSettingsContent(runtime: runtime)
+                .preferredColorScheme(runtime.colorScheme)
         }
     }
 
@@ -121,7 +102,7 @@ struct VitalsApplication: App {
 enum AppMain {
     static func main() {
         if CommandLine.arguments.contains("--render-ui") {
-            RenderHarness.run()
+            VitalsRenderHarness.run()
         } else {
             VitalsApplication.main()
         }

@@ -3,14 +3,14 @@ import SwiftUI
 import VitalsCore
 import VKit
 
-enum DashboardSection: String, CaseIterable, Identifiable {
+public enum DashboardSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case aiUsage = "AI Usage"
     case processes = "Processes"
     case network = "Network"
     case storage = "Storage"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     var systemImage: String {
         switch self {
@@ -22,7 +22,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         }
     }
 
-    var shortcutKey: KeyEquivalent? {
+    public var shortcutKey: KeyEquivalent? {
         switch self {
         case .overview: return "1"
         case .aiUsage: return "2"
@@ -992,10 +992,13 @@ private struct ProcessesDetailView: View {
 }
 
 enum ProcessIconLookup {
-    private static let cache = NSCache<NSNumber, NSImage>()
+    private static let cache = NSCache<NSString, NSImage>()
 
     static func icon(for process: ProcessMetric) -> NSImage? {
-        let key = NSNumber(value: process.pid)
+        // Key on process identity (pid + resolved path/name), not pid alone: a
+        // recycled PID belongs to a different executable and must not inherit the
+        // previous process's cached icon.
+        let key = "\(process.pid)|\(process.path ?? process.name)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         let icon: NSImage?
         if let path = process.path {

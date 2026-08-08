@@ -8,6 +8,9 @@ let package = Package(
     ],
     products: [
         .library(name: "VitalsCore", targets: ["VitalsCore"]),
+        // The app's UI as a library, so it can be embedded (e.g. in PowerTools)
+        // as well as run standalone.
+        .library(name: "VitalsUI", targets: ["VitalsUI"]),
         .executable(name: "VitalsApp", targets: ["VitalsApp"]),
         .executable(name: "vitals-selftest", targets: ["vitals-selftest"]),
     ],
@@ -20,10 +23,18 @@ let package = Package(
             name: "VitalsCore",
             path: "Sources/VitalsCore"
         ),
+        .target(
+            name: "VitalsUI",
+            dependencies: [
+                "VitalsCore",
+                .product(name: "VKit", package: "vkit"),
+            ],
+            path: "Sources/VitalsUI"
+        ),
         .executableTarget(
             name: "VitalsApp",
             dependencies: [
-                "VitalsCore",
+                "VitalsCore", "VitalsUI",
                 .product(name: "VKit", package: "vkit"),
             ],
             path: "Sources/VitalsApp"
