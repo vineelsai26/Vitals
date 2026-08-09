@@ -36,20 +36,24 @@ struct SettingsForm: View {
 
     var body: some View {
         Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $settings.appearance) {
-                    ForEach(AppAppearance.allCases) { appearance in
-                        Text(appearance.label).tag(appearance)
+            if includeStandaloneBehavior {
+                Section("Appearance") {
+                    Picker("Theme", selection: $settings.appearance) {
+                        ForEach(AppAppearance.allCases) { appearance in
+                            Text(appearance.label).tag(appearance)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Menu bar", selection: $settings.menuBarLabel) {
+                        ForEach(MenuBarLabel.allCases) { label in
+                            Text(label.label).tag(label)
+                        }
                     }
                 }
-                .pickerStyle(.segmented)
+            }
 
-                Picker("Menu bar", selection: $settings.menuBarLabel) {
-                    ForEach(MenuBarLabel.allCases) { label in
-                        Text(label.label).tag(label)
-                    }
-                }
-
+            Section("History") {
                 Picker("Default history range", selection: $settings.historyRange) {
                     ForEach(HistoryTimeRange.allCases) { range in
                         Text(range.label).tag(range)
@@ -80,6 +84,9 @@ struct SettingsForm: View {
 
             Section("Alerts") {
                 Toggle("Enable threshold alerts", isOn: $settings.alertsEnabled)
+                    .onChange(of: settings.alertsEnabled) { _, enabled in
+                        controller.configureAlerts(enabled: enabled)
+                    }
                 Toggle("Notify on elevated thermal state", isOn: $settings.alertOnThermal)
                     .disabled(!settings.alertsEnabled)
                 thresholdRow("Memory threshold", value: $settings.alertMemoryThreshold, range: 0.7...0.98)
@@ -101,12 +108,14 @@ struct SettingsForm: View {
                 }
             }
 
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")
-                LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
-                Text("Local-first system monitor for macOS. Open source in the vstack monorepo.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            if includeStandaloneBehavior {
+                Section("About") {
+                    LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")
+                    LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
+                    Text("Local-first system monitor for macOS. Open source in the vstack monorepo.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

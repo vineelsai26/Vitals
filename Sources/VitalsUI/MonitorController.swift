@@ -188,6 +188,13 @@ final class MonitorController: ObservableObject {
         isRunning ? pause() : resume()
     }
 
+    /// Settings can enable alerts after monitoring has already started. Ask
+    /// for notification authorization at that point instead of requiring an
+    /// app restart before alerts become capable of firing.
+    func configureAlerts(enabled: Bool) {
+        Task { await alerts.prepareIfNeeded(enabled: enabled) }
+    }
+
     func refreshNow() {
         guard !demoMode else { return }
         Task { await refresh(forceUsage: true) }
