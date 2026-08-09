@@ -100,11 +100,15 @@ public struct VitalsMenuBarLabel: View {
 /// Settings-window content.
 public struct VitalsSettingsContent: View {
     @ObservedObject private var runtime: VitalsRuntime
+    private let embedded: Bool
 
-    public init(runtime: VitalsRuntime) { self.runtime = runtime }
+    public init(runtime: VitalsRuntime, embedded: Bool = false) {
+        self.runtime = runtime
+        self.embedded = embedded
+    }
 
     public var body: some View {
-        SettingsView()
+        SettingsView(embedded: embedded)
             .environmentObject(runtime.settings)
             .environmentObject(runtime.controller)
     }

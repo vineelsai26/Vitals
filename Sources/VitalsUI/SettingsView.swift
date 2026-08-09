@@ -2,12 +2,25 @@ import SwiftUI
 import VitalsCore
 
 struct SettingsView: View {
+    let embedded: Bool
+
+    init(embedded: Bool = false) {
+        self.embedded = embedded
+    }
+
+    @ViewBuilder
     var body: some View {
-        SettingsForm()
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .frame(width: 520)
-            .frame(minHeight: 600)
+        if embedded {
+            SettingsForm(includeStandaloneBehavior: false)
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+        } else {
+            SettingsForm(includeStandaloneBehavior: true)
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+                .frame(width: 520)
+                .frame(minHeight: 600)
+        }
     }
 }
 
@@ -15,6 +28,11 @@ struct SettingsView: View {
 struct SettingsForm: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var controller: MonitorController
+    let includeStandaloneBehavior: Bool
+
+    init(includeStandaloneBehavior: Bool = true) {
+        self.includeStandaloneBehavior = includeStandaloneBehavior
+    }
 
     var body: some View {
         Form {
@@ -71,14 +89,16 @@ struct SettingsForm: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("App behavior") {
-                Toggle("Launch at login", isOn: $settings.launchAtLogin)
-                Toggle("Start in the menu bar", isOn: $settings.startInMenuBar)
-                Toggle("Keep running after closing the window", isOn: $settings.closeToMenuBar)
-                Toggle("Show Vitals in the Dock", isOn: $settings.showInDock)
-                Text("Menu bar mode controls how Vitals starts. Keeping it running preserves monitoring after its window closes; Dock visibility only changes how you switch back to it.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            if includeStandaloneBehavior {
+                Section("App behavior") {
+                    Toggle("Launch at login", isOn: $settings.launchAtLogin)
+                    Toggle("Start in the menu bar", isOn: $settings.startInMenuBar)
+                    Toggle("Keep running after closing the window", isOn: $settings.closeToMenuBar)
+                    Toggle("Show Vitals in the Dock", isOn: $settings.showInDock)
+                    Text("Menu bar mode controls how Vitals starts. Keeping it running preserves monitoring after its window closes; Dock visibility only changes how you switch back to it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("About") {
